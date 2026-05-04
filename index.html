@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>一字接龙故事游戏</title>
+<style>
+  :root {
+    --bg: #faf9f5;
+    --surface: #ffffff;
+    --surface-2: #f1efe8;
+    --text: #1a1a1a;
+    --text-2: #5f5e5a;
+    --text-3: #888780;
+    --border: rgba(0,0,0,0.12);
+    --accent: #185fa5;
+    --accent-bg: #e6f1fb;
+    --danger: #a32d2d;
+    --danger-bg: #fcebeb;
+    --success: #0f6e56;
+    --success-bg: #e1f5ee;
+    --warn-bg: #faeeda;
+    --warn: #854f0b;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --surface: #262625;
+      --surface-2: #2c2c2a;
+      --text: #f0efea;
+      --text-2: #b4b2a9;
+      --text-3: #888780;
+      --border: rgba(255,255,255,0.15);
+      --accent: #85b7eb;
+      --accent-bg: #0c447c;
+      --danger-bg: #791f1f;
+      --success-bg: #085041;
+      --warn-bg: #633806;
+      --warn: #fac775;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .container { width: 100%; max-width: 560px; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 24px; }
+  h2 { font-size: 18px; font-weight: 500; margin: 0 0 16px; }
+  p { margin: 0; }
+  input[type="text"], input[type="password"], select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 0.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    height: 36px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 8px 16px;
+    border: 0.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  button:hover:not(:disabled) { background: var(--surface-2); }
+  button:active:not(:disabled) { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { opacity: 0.9; background: var(--accent); }
+  .label { font-size: 14px; color: var(--text-2); margin-bottom: 8px; }
+  .row { display: flex; gap: 8px; }
+  .stack > * + * { margin-top: 16px; }
+  .card { background: var(--surface-2); border-radius: var(--radius-lg); padding: 16px; }
+  .hint { font-size: 12px; color: var(--text-3); }
+  .danger-text { color: var(--danger); }
+  .success-text { color: var(--success); }
+  .warn-text { color: var(--warn); }
+
+  #story-display {
+    background: var(--surface-2);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    min-height: 80px;
+    font-size: 18px;
+    line-height: 1.9;
+    word-break: break-all;
+  }
+  .player-char { color: var(--accent); }
+  .ai-char { color: var(--text); }
+  .placeholder { color: var(--text-3); }
+
+  #mic-btn {
+    width: 110px; height: 110px;
+    border-radius: 50%; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  #mic-btn.recording { background: var(--danger-bg); border-color: var(--danger); }
+  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
+
+  .scores-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .score-card { background: var(--surface-2); border-radius: var(--radius); padding: 14px; }
+  .score-card .label { font-size: 13px; margin-bottom: 4px; }
+  .score-card .value { font-size: 24px; font-weight: 500; }
+  .score-card .value .max { font-size: 13px; color: var(--text-3); font-weight: 400; }
+  .score-card.total {
+    grid-column: span 2;
+    background: var(--surface); border: 0.5px solid var(--border);
+    text-align: center;
+  }
+  .score-card.total .value { font-size: 28px; }
+
+  .test-result { font-size: 12px; color: var(--text-3); min-height: 16px; margin-top: 8px; }
+  .turn-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; }
+  .seed-display { color: var(--text-2); }
+  .turn-indicator { font-weight: 500; }
+  .provider-display { font-size: 12px; color: var(--text-3); }
+
+  .seed-row { display: flex; gap: 8px; align-items: stretch; }
+  .seed-row input { flex: 1; }
+  .seed-row button { white-space: nowrap; padding: 0 12px; }
+
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    cursor: pointer;
+    border: 0.5px solid transparent;
+  }
+  .history-item:hover { border-color: var(--border); }
+  .history-item .meta { font-size: 12px; color: var(--text-3); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .history-item .text { font-size: 14px; line-height: 1.6; word-break: break-all; }
+  .history-empty { font-size: 13px; color: var(--text-3); text-align: center; padding: 24px; }
+
+  details { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; }
+  details summary { cursor: pointer; color: var(--text-2); }
+  details[open] summary { margin-bottom: 8px; }
+  details ul { margin: 4px 0; padding-left: 20px; }
+  details li { margin: 4px 0; }
+  details code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .modal {
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h2 { margin-bottom: 12px; }
+
+  #share-canvas-preview { max-width: 100%; border-radius: var(--radius); border: 0.5px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>一字接龙故事游戏</h1>
+
+  <!-- API key gate -->
+  <div id="key-view" class="stack">
+    <div>
+      <div class="label">选择模型平台</div>
+      <select id="provider-select">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="openai">OpenAI (GPT)</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="label">API Key</div>
+      <input type="password" id="api-key" placeholder="" autocomplete="off" />
+      <p class="hint" style="margin-top: 6px;">仅保存在你浏览器的 localStorage，不上传任何服务器。</p>
+    </div>
+
+    <div>
+      <div class="label">模型（可不填，用默认）</div>
+      <input type="text" id="model-input" placeholder="" />
+      <p id="default-model-hint" class="hint" style="margin-top: 6px;"></p>
+    </div>
+
+    <button id="save-key" class="primary" style="width: 100%;">保存并测试连接</button>
+    <p id="key-test-result" class="test-result" style="text-align: center;"></p>
+
+    <details>
+      <summary>怎么拿 API Key？</summary>
+      <ul>
+        <li><strong>Anthropic</strong>：<code>console.anthropic.com</code> → API Keys → Create Key，以 <code>sk-ant-</code> 开头</li>
+        <li><strong>DeepSeek</strong>：<code>platform.deepseek.com</code> → API keys → 创建，以 <code>sk-</code> 开头。国内用户最方便，价格也最便宜</li>
+        <li><strong>OpenAI</strong>：<code>platform.openai.com</code> → API keys，以 <code>sk-</code> 开头</li>
+        <li>都是按 token 计费，玩一局成本几分钱</li>
+      </ul>
+    </details>
+  </div>
+
+  <!-- Setup view -->
+  <div id="setup-view" class="stack" style="display: none;">
+    <div id="provider-info" class="provider-display"></div>
+
+    <div>
+      <div class="label">启发词（可选）</div>
+      <div class="seed-row">
+        <input type="text" id="seed-input" placeholder="比如：地铁、雨夜、外星人……" />
+        <button id="random-seed" title="随机生成一个启发词">🎲 随机</button>
+      </div>
+      <p id="seed-status" class="hint" style="margin-top: 6px; min-height: 16px;"></p>
+    </div>
+
+    <div>
+      <div class="label">谁来开场？</div>
+      <div class="row">
+        <button id="player-first" style="flex: 1;">我先来</button>
+        <button id="ai-first" style="flex: 1;">AI 先来</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom: 8px; font-weight: 500; color: var(--text);">先做两个检查</div>
+      <div class="row">
+        <button id="test-mic" style="flex: 1;">🎤 测试麦克风</button>
+        <button id="test-tts" style="flex: 1;">🔊 测试 AI 说话</button>
+      </div>
+      <p id="test-result" class="test-result"></p>
+    </div>
+
+    <div class="row">
+      <button id="show-history" style="flex: 1;">📖 我的故事集</button>
+      <button id="change-key" style="flex: 1; font-size: 12px;">更换平台 / Key</button>
+    </div>
+  </div>
+
+  <!-- Game view -->
+  <div id="game-view" class="stack" style="display: none;">
+    <div class="turn-row">
+      <span id="seed-display" class="seed-display"></span>
+      <span id="turn-indicator" class="turn-indicator"></span>
+    </div>
+    
+    <div id="story-display">
+      <span class="placeholder">故事将在这里展开……</span>
+    </div>
+
+    <div id="player-input-row" style="display: none;">
+      <div class="mic-area">
+        <button id="mic-btn">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+            <path d="M5 10v2a7 7 0 0 0 14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+        </button>
+        <p id="mic-hint" class="hint" style="font-size: 13px; color: var(--text-2);">按住说话，松开识别</p>
+        <p id="mic-heard" class="hint" style="min-height: 18px;"></p>
+      </div>
+    </div>
+    
+    <div id="ai-thinking" style="display: none; text-align: center; padding: 14px; color: var(--text-2); font-size: 14px;">
+      AI 在想下一个字……
+    </div>
+    
+    <div class="row">
+      <button id="end-early" style="flex: 1;">就到这吧</button>
+      <button id="reset-game" style="flex: 1;">重开</button>
+    </div>
+    
+    <p class="hint" style="text-align: center;">字数 8 个之后，AI 判断完整就自动收尾</p>
+  </div>
+
+  <!-- Result view -->
+  <div id="result-view" class="stack" style="display: none;">
+    <div class="card">
+      <div class="label" style="margin-bottom: 8px;">最终故事</div>
+      <p id="final-story" style="font-size: 18px; line-height: 1.9;"></p>
+    </div>
+    
+    <div id="scores-grid" class="scores-grid"></div>
+    
+    <div class="card" style="background: var(--surface); border: 0.5px solid var(--border);">
+      <div class="label" style="margin-bottom: 8px;">AI 点评</div>
+      <p id="ai-comment" style="font-size: 14px; line-height: 1.8;"></p>
+    </div>
+
+    <div class="row">
+      <button id="save-story" style="flex: 1;">💾 保存到故事集</button>
+      <button id="share-story" style="flex: 1;">🖼️ 生成分享图</button>
+    </div>
+    <p id="save-status" class="hint" style="text-align: center; min-height: 16px;"></p>
+    
+    <button id="play-again" class="primary" style="width: 100%;">再来一局</button>
+  </div>
+
+  <!-- History view -->
+  <div id="history-view" class="stack" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0;">我的故事集</h2>
+      <button id="back-from-history" style="font-size: 13px;">← 返回</button>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </div>
+
+  <!-- Share image modal -->
+  <div id="share-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal">
+      <h2>分享图</h2>
+      <p class="hint" style="margin-bottom: 12px;">长按或右键图片可保存</p>
+      <img id="share-canvas-preview" alt="分享图预览" />
+      <div class="row" style="margin-top: 16px;">
+        <button id="download-share" class="primary" style="flex: 1;">下载图片</button>
+        <button id="close-share" style="flex: 1;">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Story detail modal -->
+  <div id="detail-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal">
+      <h2>故事详情</h2>
+      <div id="detail-content"></div>
+      <div class="row" style="margin-top: 16px;">
+        <button id="detail-share" style="flex: 1;">🖼️ 生成分享图</button>
+        <button id="detail-delete" style="flex: 1;">🗑️ 删除</button>
+        <button id="detail-close" style="flex: 1;">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ---------- Provider configs ----------
+  const PROVIDERS = {
+    anthropic: {
+      name: 'Anthropic (Claude)',
+      url: 'https://api.anthropic.com/v1/messages',
+      defaultModel: 'claude-sonnet-4-5',
+      keyPrefix: 'sk-ant-',
+      keyPlaceholder: 'sk-ant-...',
+      modelPlaceholder: 'claude-sonnet-4-5',
+      buildHeaders: (key) => ({
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      }),
+      buildBody: (model, prompt, maxTokens) => ({
+        model, max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+      }),
+      parseResponse: (data) => data.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+    },
+    deepseek: {
+      name: 'DeepSeek',
+      url: 'https://api.deepseek.com/chat/completions',
+      defaultModel: 'deepseek-chat',
+      keyPrefix: 'sk-',
+      keyPlaceholder: 'sk-...',
+      modelPlaceholder: 'deepseek-chat (默认) 或 deepseek-reasoner',
+      buildHeaders: (key) => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      }),
+      buildBody: (model, prompt, maxTokens) => ({
+        model, max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 1.0
+      }),
+      parseResponse: (data) => data.choices[0].message.content.trim()
+    },
+    openai: {
+      name: 'OpenAI (GPT)',
+      url: 'https://api.openai.com/v1/chat/completions',
+      defaultModel: 'gpt-4o-mini',
+      keyPrefix: 'sk-',
+      keyPlaceholder: 'sk-...',
+      modelPlaceholder: 'gpt-4o-mini (默认) 或 gpt-4o',
+      buildHeaders: (key) => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      }),
+      buildBody: (model, prompt, maxTokens) => ({
+        model, max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+      }),
+      parseResponse: (data) => data.choices[0].message.content.trim()
+    }
+  };
+
+  // ---------- Seed words pool ----------
+  const SEED_WORDS = [
+    // Time/atmosphere
+    '凌晨三点', '雨夜', '深秋', '盛夏正午', '冬至', '黎明前',
+    // Places
+    '地铁', '便利店', '老电梯', '海边小镇', '废弃游乐场', '山顶咖啡馆', '末班车', '机场', '天台', '澡堂',
+    // Events
+    '分手那天', '搬家', '同学会', '相亲', '辞职信', '体检报告', '生日', '走丢的猫', '跨年',
+    // Speculative
+    '末日', '外星人', '时光机', '神秘快递', '会说话的冰箱', '复制人', '平行宇宙', '记忆消除',
+    // Characters
+    '室友', '前任', '快递员', '出租车司机', '占卜师', '夜班保安', '失忆者', '邻居家小孩',
+    // Objects
+    '一封旧信', '陌生钥匙', '没拍完的胶卷', '过期罐头', '别人的日记本', '掉色的合影',
+    // Emotional
+    '后悔', '想念', '忽然想起', '装作没看见', '其实早就知道'
+  ];
+
+  function randomSeed(exclude) {
+    const pool = SEED_WORDS.filter(w => w !== exclude);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  const STORAGE_KEY = 'word_relay_provider_config_v1';
+  const HISTORY_KEY = 'word_relay_history_v1';
+  const STATE = {
+    provider: 'anthropic',
+    apiKey: '',
+    model: '',
+    seed: '',
+    story: [],
+    turn: 'player',
+    minLength: 8,
+    maxLength: 60,
+    listening: false,
+    recognition: null,
+    lastTranscript: '',
+    lastResult: null, // {scores, comment} for sharing
+    detailViewingId: null,
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const keyView = $('key-view');
+  const setupView = $('setup-view');
+  const gameView = $('game-view');
+  const resultView = $('result-view');
+  const historyView = $('history-view');
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const synth = window.speechSynthesis;
+
+  // ---------- Provider UI sync ----------
+  function updateProviderUI() {
+    const p = PROVIDERS[$('provider-select').value];
+    $('api-key').placeholder = p.keyPlaceholder;
+    $('model-input').placeholder = p.modelPlaceholder;
+    $('default-model-hint').textContent = `默认: ${p.defaultModel}`;
+  }
+  $('provider-select').addEventListener('change', updateProviderUI);
+  updateProviderUI();
+
+  // ---------- Load saved config ----------
+  const savedRaw = localStorage.getItem(STORAGE_KEY);
+  if (savedRaw) {
+    try {
+      const saved = JSON.parse(savedRaw);
+      if (saved.provider && saved.apiKey && PROVIDERS[saved.provider]) {
+        STATE.provider = saved.provider;
+        STATE.apiKey = saved.apiKey;
+        STATE.model = saved.model || '';
+        showSetup();
+      }
+    } catch (e) {}
+  }
+
+  // ---------- Save key + connectivity test ----------
+  $('save-key').addEventListener('click', async () => {
+    const provider = $('provider-select').value;
+    const key = $('api-key').value.trim();
+    const model = $('model-input').value.trim();
+    const p = PROVIDERS[provider];
+    const result = $('key-test-result');
+    const btn = $('save-key');
+
+    if (!key) {
+      result.className = 'test-result danger-text';
+      result.textContent = '请输入 API Key';
+      return;
+    }
+    if (!key.startsWith(p.keyPrefix)) {
+      if (!confirm(`Key 通常以 ${p.keyPrefix} 开头，你的不是。继续吗？`)) return;
+    }
+
+    // Temporarily set state for the test call
+    STATE.provider = provider;
+    STATE.apiKey = key;
+    STATE.model = model;
+
+    btn.disabled = true;
+    btn.textContent = '测试中…';
+    result.className = 'test-result';
+    result.textContent = '正在向模型发送测试请求…';
+
+    try {
+      const reply = await callLLM('回复"ok"两个字符，不要任何其他内容。', 20);
+      // Success
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ provider, apiKey: key, model }));
+      result.className = 'test-result success-text';
+      result.textContent = `✓ 连接成功（模型回复：${reply.substring(0, 20)}）`;
+      btn.textContent = '保存并测试连接';
+      btn.disabled = false;
+      setTimeout(() => showSetup(), 600);
+    } catch (err) {
+      result.className = 'test-result danger-text';
+      let msg = err.message;
+      if (msg.includes('401')) msg = 'Key 无效（401 未授权）';
+      else if (msg.includes('403')) msg = '权限不足（403）';
+      else if (msg.includes('429')) msg = '请求过频或额度不足（429）';
+      else if (msg.includes('Failed to fetch')) msg = '网络问题，可能需要科学上网';
+      result.textContent = `✗ 连接失败：${msg}`;
+      btn.textContent = '保存并测试连接';
+      btn.disabled = false;
+    }
+  });
+
+  $('change-key').addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_KEY);
+    STATE.apiKey = '';
+    $('api-key').value = '';
+    $('model-input').value = '';
+    $('key-test-result').textContent = '';
+    setupView.style.display = 'none';
+    keyView.style.display = 'block';
+  });
+
+  function showSetup() {
+    keyView.style.display = 'none';
+    historyView.style.display = 'none';
+    setupView.style.display = 'block';
+    const p = PROVIDERS[STATE.provider];
+    const modelName = STATE.model || p.defaultModel;
+    $('provider-info').textContent = `当前使用：${p.name} · ${modelName}`;
+  }
+
+  // ---------- Random seed ----------
+  $('random-seed').addEventListener('click', () => {
+    const current = $('seed-input').value.trim();
+    const newSeed = randomSeed(current);
+    $('seed-input').value = newSeed;
+    $('seed-status').textContent = `已随机选中：${newSeed}（可继续点骰子换一个）`;
+  });
+
+  // ---------- Unified API call ----------
+  async function callLLM(prompt, maxTokens) {
+    const p = PROVIDERS[STATE.provider];
+    const model = STATE.model || p.defaultModel;
+    const response = await fetch(p.url, {
+      method: 'POST',
+      headers: p.buildHeaders(STATE.apiKey),
+      body: JSON.stringify(p.buildBody(model, prompt, maxTokens || 300))
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`API ${response.status}: ${errText.substring(0, 200)}`);
+    }
+    const data = await response.json();
+    return p.parseResponse(data);
+  }
+
+  // ---------- TTS ----------
+  function speakChar(text) {
+    if (!synth) return;
+    try {
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN';
+      utter.rate = 0.9;
+      utter.volume = 1.0;
+      const voices = synth.getVoices();
+      const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+      if (zhVoice) utter.voice = zhVoice;
+      synth.speak(utter);
+    } catch (err) { console.error('TTS error:', err); }
+  }
+  if (synth) synth.onvoiceschanged = () => {};
+
+  // ---------- Test buttons ----------
+  $('test-mic').addEventListener('click', async () => {
+    const result = $('test-result');
+    result.className = 'test-result';
+    result.textContent = '请求麦克风权限中…';
+    if (!SR) {
+      result.className = 'test-result warn-text';
+      result.textContent = '此浏览器不支持语音识别。建议桌面 Chrome。';
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      result.className = 'test-result success-text';
+      result.textContent = '✓ 麦克风权限正常';
+    } catch (err) {
+      result.className = 'test-result danger-text';
+      if (err.name === 'NotAllowedError') {
+        result.textContent = '✗ 权限被拒。点击地址栏锁图标 → 麦克风 → 允许';
+      } else if (err.name === 'NotFoundError') {
+        result.textContent = '✗ 未检测到麦克风设备';
+      } else {
+        result.textContent = `✗ ${err.name}: ${err.message}`;
+      }
+    }
+  });
+
+  $('test-tts').addEventListener('click', () => {
+    const result = $('test-result');
+    if (!synth) {
+      result.className = 'test-result warn-text';
+      result.textContent = '此浏览器不支持语音合成';
+      return;
+    }
+    result.className = 'test-result';
+    result.textContent = '正在播放…（如听不到请检查系统音量）';
+    speakChar('你好');
+    setTimeout(() => {
+      result.className = 'test-result success-text';
+      result.textContent = '✓ 如果听到"你好"，AI 说话功能正常';
+    }, 1500);
+  });
+
+  // ---------- Speech recognition ----------
+  function createRecognition() {
+    if (!SR) return null;
+    const rec = new SR();
+    rec.lang = 'zh-CN';
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    return rec;
+  }
+
+  // ---------- Game flow ----------
+  $('player-first').addEventListener('click', () => startGame('player'));
+  $('ai-first').addEventListener('click', () => startGame('ai'));
+
+  function startGame(firstPlayer) {
+    STATE.seed = $('seed-input').value.trim();
+    STATE.story = [];
+    STATE.turn = firstPlayer;
+    STATE.lastResult = null;
+    setupView.style.display = 'none';
+    resultView.style.display = 'none';
+    gameView.style.display = 'block';
+    $('seed-display').textContent = STATE.seed ? `启发词：${STATE.seed}` : '自由发挥';
+    renderStory();
+    nextTurn();
+  }
+
+  function nextTurn() {
+    if (STATE.story.length >= STATE.maxLength) { endGame(); return; }
+    if (STATE.turn === 'player') {
+      $('turn-indicator').textContent = '轮到你';
+      $('turn-indicator').style.color = 'var(--accent)';
+      $('player-input-row').style.display = 'block';
+      $('ai-thinking').style.display = 'none';
+      $('mic-heard').textContent = '';
+    } else {
+      $('turn-indicator').textContent = 'AI 思考中';
+      $('turn-indicator').style.color = 'var(--text-2)';
+      $('player-input-row').style.display = 'none';
+      $('ai-thinking').style.display = 'block';
+      aiTurn();
+    }
+  }
+
+  function renderStory() {
+    const display = $('story-display');
+    if (STATE.story.length === 0) {
+      display.innerHTML = '<span class="placeholder">故事将在这里展开……</span>';
+      return;
+    }
+    display.innerHTML = STATE.story.map(s => {
+      const cls = s.by === 'player' ? 'player-char' : 'ai-char';
+      return `<span class="${cls}">${escapeHtml(s.char)}</span>`;
+    }).join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function extractJSON(text) {
+    let s = text.trim();
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+    const first = s.indexOf('{');
+    const last = s.lastIndexOf('}');
+    if (first !== -1 && last !== -1 && last > first) s = s.substring(first, last + 1);
+    return JSON.parse(s);
+  }
+
+  // ---------- Mic ----------
+  const micBtn = $('mic-btn');
+  const micHint = $('mic-hint');
+  const micHeard = $('mic-heard');
+
+  function startListening() {
+    if (!SR || STATE.listening) return;
+    STATE.recognition = createRecognition();
+    if (!STATE.recognition) return;
+    STATE.lastTranscript = '';
+    STATE.recognition.onresult = (e) => {
+      let txt = '';
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      STATE.lastTranscript = txt;
+      micHeard.textContent = `听到：${txt}`;
+    };
+    STATE.recognition.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        micHeard.textContent = '麦克风权限被拒，请检查浏览器设置';
+      } else if (e.error === 'no-speech') {
+        micHeard.textContent = '没听清，再来一次';
+      } else {
+        micHeard.textContent = `识别出错：${e.error}`;
+      }
+      STATE.listening = false;
+      micBtn.classList.remove('recording');
+      micHint.textContent = '按住说话，松开识别';
+    };
+    STATE.recognition.onend = () => {
+      if (STATE.listening) {
+        STATE.listening = false;
+        micBtn.classList.remove('recording');
+        finishUtterance();
+      }
+    };
+    try {
+      STATE.recognition.start();
+      STATE.listening = true;
+      micBtn.classList.add('recording');
+      micHint.textContent = '正在听…松开结束';
+      micHeard.textContent = '';
+    } catch (err) {
+      micHeard.textContent = `启动失败：${err.message}`;
+    }
+  }
+
+  function stopListening() {
+    if (!STATE.recognition || !STATE.listening) return;
+    try { STATE.recognition.stop(); } catch (err) {}
+  }
+
+  function finishUtterance() {
+    const txt = (STATE.lastTranscript || '').trim();
+    micHint.textContent = '按住说话，松开识别';
+    if (!txt) { micHeard.textContent = '没听到，再来一次'; return; }
+    const chars = Array.from(txt).filter(c => c.trim().length > 0);
+    const ch = chars[0];
+    if (!ch) { micHeard.textContent = '没识别到字，再来一次'; return; }
+    micHeard.textContent = `用了：${ch}`;
+    STATE.story.push({ char: ch, by: 'player' });
+    renderStory();
+    STATE.turn = 'ai';
+    setTimeout(() => nextTurn(), 500);
+  }
+
+  micBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startListening(); });
+  micBtn.addEventListener('mouseup', (e) => { e.preventDefault(); stopListening(); });
+  micBtn.addEventListener('mouseleave', () => { if (STATE.listening) stopListening(); });
+  micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startListening(); }, { passive: false });
+  micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopListening(); }, { passive: false });
+  micBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopListening(); });
+  micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---------- AI turn ----------
+  async function aiTurn() {
+    const currentStory = STATE.story.map(s => s.char).join('');
+    const styles = ['老实接（让故事顺畅推进）', '搞乱接（制造转折或意外）', '随便接（加入新元素或新角色）'];
+    const chosenStyle = styles[Math.floor(Math.random() * styles.length)];
+    const canEnd = STATE.story.length >= STATE.minLength;
+
+    const prompt = `你在玩一字接龙故事游戏。每个人轮流贡献一个汉字（或一个标点），拼成故事。
+
+${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前故事：「${currentStory}」
+
+轮到你接一个字。本回合风格：${chosenStyle}
+
+注意：玩家是语音输入，可能有同音字误识别，请宽容理解上下文。
+
+严格按 JSON 格式回复，不要 markdown 代码块，不要任何解释文字，只输出 JSON 对象本身：
+{"char": "接的字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话理由"}
+
+要求：
+- char 只能是一个字符（汉字或标点）
+- ${canEnd ? '故事超过 30 字且有明显结尾感时，complete 设为 true' : 'complete 必须为 false'}`;
+
+    try {
+      const text = await callLLM(prompt, 300);
+      const parsed = extractJSON(text);
+      let aiChar = Array.from(parsed.char || '')[0] || '。';
+      STATE.story.push({ char: aiChar, by: 'ai' });
+      renderStory();
+      speakChar(aiChar);
+
+      const shouldEnd = canEnd && parsed.complete === true;
+      if (shouldEnd || STATE.story.length >= STATE.maxLength) {
+        setTimeout(() => endGame(), 800);
+      } else {
+        STATE.turn = 'player';
+        setTimeout(() => nextTurn(), 600);
+      }
+    } catch (err) {
+      console.error('AI turn error:', err);
+      $('ai-thinking').style.display = 'none';
+      alert(`AI 出错了：${err.message}\n\n如果是 401 错误，可能 API key 无效，请重新输入。`);
+      STATE.turn = 'player';
+      nextTurn();
+    }
+  }
+
+  $('end-early').addEventListener('click', endGame);
+  $('reset-game').addEventListener('click', resetToSetup);
+  $('play-again').addEventListener('click', resetToSetup);
+
+  function resetToSetup() {
+    STATE.story = [];
+    STATE.lastResult = null;
+    if (STATE.recognition && STATE.listening) {
+      try { STATE.recognition.stop(); } catch(e) {}
+      STATE.listening = false;
+    }
+    if (synth) synth.cancel();
+    gameView.style.display = 'none';
+    resultView.style.display = 'none';
+    $('save-status').textContent = '';
+    setupView.style.display = 'block';
+  }
+
+  async function endGame() {
+    if (STATE.recognition && STATE.listening) {
+      try { STATE.recognition.stop(); } catch(e) {}
+      STATE.listening = false;
+    }
+    gameView.style.display = 'none';
+    resultView.style.display = 'block';
+    $('save-status').textContent = '';
+
+    const finalStory = STATE.story.map(s => s.char).join('');
+    $('final-story').textContent = finalStory || '（什么也没发生）';
+
+    $('scores-grid').innerHTML = `
+      <div class="score-card"><div class="label">流畅度</div><div class="value" style="color: var(--text-3);">…</div></div>
+      <div class="score-card"><div class="label">趣味/意外</div><div class="value" style="color: var(--text-3);">…</div></div>
+      <div class="score-card"><div class="label">完整性</div><div class="value" style="color: var(--text-3);">…</div></div>
+      <div class="score-card"><div class="label">玩家救场</div><div class="value" style="color: var(--text-3);">…</div></div>
+    `;
+    $('ai-comment').textContent = '正在品味这个故事……';
+
+    if (STATE.story.length === 0) {
+      $('ai-comment').textContent = '故事还没开始就结束了。';
+      $('scores-grid').innerHTML = '';
+      return;
+    }
+
+    const annotated = STATE.story.map(s => `${s.char}(${s.by === 'player' ? '玩家' : 'AI'})`).join('');
+    const scorePrompt = `你是一字接龙故事游戏的评分员。玩家和 AI 轮流贡献一个字（玩家是语音输入，可能有同音字误识别）。
+
+${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.story.map(s => s.char).join('')}」
+每字归属：${annotated}
+
+四维度评分（0-10）+ 总点评：
+1. 流畅度：通顺、连贯（同音字宽容）
+2. 趣味/意外性：有让人会心一笑的转折
+3. 完整性：有头有尾
+4. 玩家救场：玩家接字时上下文有多难、ta接得有多巧
+
+严格按 JSON 格式回复，不要 markdown，不要任何解释文字，只输出 JSON 对象本身：
+{"fluency": 数字, "surprise": 数字, "completeness": 数字, "rescue": 数字, "comment": "2-3句话点评，要具体提到故事里的某个字或转折，可以幽默"}`;
+
+    try {
+      const text = await callLLM(scorePrompt, 800);
+      const parsed = extractJSON(text);
+      STATE.lastResult = parsed;
+      renderScores(parsed);
+    } catch (err) {
+      console.error('Scoring error:', err);
+      $('ai-comment').textContent = `评分失败：${err.message}`;
+      $('scores-grid').innerHTML = '';
+    }
+  }
+
+  function renderScores(s) {
+    const dims = [
+      { key: 'fluency', label: '流畅度' },
+      { key: 'surprise', label: '趣味/意外' },
+      { key: 'completeness', label: '完整性' },
+      { key: 'rescue', label: '玩家救场' },
+    ];
+    const total = dims.reduce((sum, d) => sum + (Number(s[d.key]) || 0), 0);
+    const avg = (total / dims.length).toFixed(1);
+
+    $('scores-grid').innerHTML = dims.map(d => {
+      const val = Number(s[d.key]) || 0;
+      return `
+        <div class="score-card">
+          <div class="label">${d.label}</div>
+          <div class="value">${val}<span class="max"> / 10</span></div>
+        </div>
+      `;
+    }).join('') + `
+      <div class="score-card total">
+        <div class="label">综合</div>
+        <div class="value">${avg}<span class="max"> / 10</span></div>
+      </div>
+    `;
+    $('ai-comment').textContent = s.comment || '（AI 没说话）';
+  }
+
+  // ---------- History (save/load/delete) ----------
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveHistory(list) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  }
+
+  $('save-story').addEventListener('click', () => {
+    if (STATE.story.length === 0) return;
+    const list = loadHistory();
+    const entry = {
+      id: 'story_' + Date.now(),
+      timestamp: Date.now(),
+      seed: STATE.seed,
+      story: STATE.story.slice(),
+      result: STATE.lastResult,
+    };
+    list.unshift(entry);
+    saveHistory(list);
+    $('save-status').className = 'hint success-text';
+    $('save-status').textContent = '✓ 已保存到故事集';
+    $('save-story').disabled = true;
+  });
+
+  $('show-history').addEventListener('click', () => {
+    setupView.style.display = 'none';
+    historyView.style.display = 'block';
+    renderHistory();
+  });
+
+  $('back-from-history').addEventListener('click', () => {
+    historyView.style.display = 'none';
+    setupView.style.display = 'block';
+  });
+
+  function renderHistory() {
+    const list = loadHistory();
+    const container = $('history-list');
+    if (list.length === 0) {
+      container.innerHTML = '<div class="history-empty">还没有保存任何故事。玩一局，结束后点"保存到故事集"吧。</div>';
+      return;
+    }
+    container.innerHTML = list.map(e => {
+      const text = e.story.map(s => s.char).join('');
+      const date = new Date(e.timestamp);
+      const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+      const seedStr = e.seed ? `启发词：${e.seed}` : '自由发挥';
+      const score = e.result ? `综合 ${((e.result.fluency + e.result.surprise + e.result.completeness + e.result.rescue) / 4).toFixed(1)}` : '';
+      return `
+        <div class="history-item" data-id="${e.id}">
+          <div class="meta">
+            <span>${seedStr} · ${dateStr}</span>
+            <span>${score}</span>
+          </div>
+          <div class="text">${escapeHtml(text)}</div>
+        </div>
+      `;
+    }).join('');
+    container.querySelectorAll('.history-item').forEach(el => {
+      el.addEventListener('click', () => showStoryDetail(el.dataset.id));
+    });
+  }
+
+  function showStoryDetail(id) {
+    const list = loadHistory();
+    const entry = list.find(e => e.id === id);
+    if (!entry) return;
+    STATE.detailViewingId = id;
+
+    const finalStory = entry.story.map(s => {
+      const cls = s.by === 'player' ? 'player-char' : 'ai-char';
+      return `<span class="${cls}">${escapeHtml(s.char)}</span>`;
+    }).join('');
+
+    let resultHtml = '';
+    if (entry.result) {
+      const r = entry.result;
+      const avg = ((r.fluency + r.surprise + r.completeness + r.rescue) / 4).toFixed(1);
+      resultHtml = `
+        <div style="margin-top: 16px; font-size: 13px; color: var(--text-2);">
+          流畅 ${r.fluency} · 趣味 ${r.surprise} · 完整 ${r.completeness} · 救场 ${r.rescue} · 综合 ${avg}
+        </div>
+        <div style="margin-top: 12px; font-size: 14px; line-height: 1.7;">${escapeHtml(r.comment || '')}</div>
+      `;
+    }
+
+    const date = new Date(entry.timestamp);
+    const seedStr = entry.seed ? `启发词：${entry.seed}` : '自由发挥';
+
+    $('detail-content').innerHTML = `
+      <div style="font-size: 12px; color: var(--text-3); margin-bottom: 8px;">${seedStr} · ${date.toLocaleString('zh-CN')}</div>
+      <div style="background: var(--surface-2); border-radius: var(--radius); padding: 16px; font-size: 18px; line-height: 1.9; word-break: break-all;">${finalStory}</div>
+      ${resultHtml}
+    `;
+    $('detail-modal').style.display = 'flex';
+  }
+
+  $('detail-close').addEventListener('click', () => { $('detail-modal').style.display = 'none'; });
+  $('detail-delete').addEventListener('click', () => {
+    if (!STATE.detailViewingId) return;
+    if (!confirm('确认删除这个故事？')) return;
+    const list = loadHistory().filter(e => e.id !== STATE.detailViewingId);
+    saveHistory(list);
+    $('detail-modal').style.display = 'none';
+    renderHistory();
+  });
+  $('detail-share').addEventListener('click', () => {
+    if (!STATE.detailViewingId) return;
+    const entry = loadHistory().find(e => e.id === STATE.detailViewingId);
+    if (entry) generateShareImage(entry);
+  });
+
+  // ---------- Share image generation ----------
+  $('share-story').addEventListener('click', () => {
+    const entry = {
+      seed: STATE.seed,
+      story: STATE.story,
+      result: STATE.lastResult,
+      timestamp: Date.now(),
+    };
+    generateShareImage(entry);
+  });
+
+  function generateShareImage(entry) {
+    const W = 800;
+    const PAD = 56;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * 2; // 2x for retina
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+
+    // Detect dark mode for theming
+    const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const bg = isDark ? '#1a1a1a' : '#faf9f5';
+    const surface = isDark ? '#2c2c2a' : '#f1efe8';
+    const textCol = isDark ? '#f0efea' : '#1a1a1a';
+    const text2 = isDark ? '#b4b2a9' : '#5f5e5a';
+    const text3 = isDark ? '#888780' : '#888780';
+    const accent = isDark ? '#85b7eb' : '#185fa5';
+
+    const text = entry.story.map(s => s.char).join('');
+    const seedStr = entry.seed ? `启发词 · ${entry.seed}` : '自由发挥';
+    const date = new Date(entry.timestamp);
+    const dateStr = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}`;
+
+    // ---- Layout pass ----
+    const fontFamily = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+
+    // Wrap story text
+    const storyFont = `500 28px ${fontFamily}`;
+    ctx.font = storyFont;
+    const lineHeight = 50;
+    const maxWidth = W - PAD * 2 - 40; // -40 for inner card padding
+    const storyLines = wrapTextByWidth(ctx, text, maxWidth);
+    const storyBlockHeight = storyLines.length * lineHeight + 40;
+
+    // Comment wrap
+    let commentLines = [];
+    if (entry.result && entry.result.comment) {
+      ctx.font = `400 16px ${fontFamily}`;
+      commentLines = wrapTextByWidth(ctx, entry.result.comment, W - PAD * 2);
+    }
+
+    // Total height calc
+    let H = PAD; // top
+    H += 28; // title baseline
+    H += 16; // gap
+    H += 18; // meta line
+    H += 32; // gap
+    H += storyBlockHeight; // story card
+    H += 32; // gap
+    if (entry.result) {
+      H += 80; // score row
+      H += 24; // gap
+      H += commentLines.length * 26 + 8;
+    }
+    H += 40; // bottom signature
+    H += PAD;
+
+    canvas.height = H * 2;
+    ctx.scale(2, 2);
+
+    // ---- Paint pass ----
+    // bg
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    let y = PAD;
+
+    // Title
+    ctx.fillStyle = textCol;
+    ctx.font = `500 22px ${fontFamily}`;
+    ctx.textBaseline = 'top';
+    ctx.fillText('一字接龙故事', PAD, y);
+    y += 28;
+
+    y += 16;
+    // Meta
+    ctx.fillStyle = text3;
+    ctx.font = `400 13px ${fontFamily}`;
+    ctx.fillText(`${seedStr}  ·  ${dateStr}`, PAD, y);
+    y += 18;
+
+    y += 32;
+    // Story card
+    ctx.fillStyle = surface;
+    roundRect(ctx, PAD, y, W - PAD * 2, storyBlockHeight, 12);
+    ctx.fill();
+
+    // Story text — color player chars in accent
+    ctx.font = storyFont;
+    let charIdx = 0;
+    let lineY = y + 20;
+    for (const line of storyLines) {
+      let lineX = PAD + 20;
+      for (const ch of line) {
+        // find char in story array by index
+        const piece = entry.story[charIdx];
+        const isPlayer = piece && piece.by === 'player';
+        ctx.fillStyle = isPlayer ? accent : textCol;
+        ctx.fillText(ch, lineX, lineY);
+        lineX += ctx.measureText(ch).width;
+        charIdx++;
+      }
+      lineY += lineHeight;
+    }
+    y += storyBlockHeight;
+
+    y += 32;
+
+    // Scores
+    if (entry.result) {
+      const r = entry.result;
+      const avg = ((r.fluency + r.surprise + r.completeness + r.rescue) / 4).toFixed(1);
+      const items = [
+        ['流畅', r.fluency],
+        ['趣味', r.surprise],
+        ['完整', r.completeness],
+        ['救场', r.rescue],
+        ['综合', avg],
+      ];
+      const cellW = (W - PAD * 2 - 16) / 5;
+      items.forEach((item, i) => {
+        const cx = PAD + i * (cellW + 4);
+        ctx.fillStyle = surface;
+        roundRect(ctx, cx, y, cellW, 80, 8);
+        ctx.fill();
+        // label
+        ctx.fillStyle = text2;
+        ctx.font = `400 13px ${fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(item[0], cx + cellW / 2, y + 14);
+        // value
+        ctx.fillStyle = textCol;
+        ctx.font = `500 24px ${fontFamily}`;
+        ctx.fillText(String(item[1]), cx + cellW / 2, y + 38);
+      });
+      ctx.textAlign = 'left';
+      y += 80;
+
+      y += 24;
+      // Comment
+      ctx.fillStyle = text2;
+      ctx.font = `400 16px ${fontFamily}`;
+      for (const line of commentLines) {
+        ctx.fillText(line, PAD, y);
+        y += 26;
+      }
+      y += 8;
+    }
+
+    y += 40;
+    // Footer
+    ctx.fillStyle = text3;
+    ctx.font = `400 12px ${fontFamily}`;
+    ctx.textAlign = 'right';
+    ctx.fillText('一字接龙 · 即兴喜剧小游戏', W - PAD, y);
+    ctx.textAlign = 'left';
+
+    // Show modal
+    const dataUrl = canvas.toDataURL('image/png');
+    $('share-canvas-preview').src = dataUrl;
+    $('share-modal').style.display = 'flex';
+    $('share-modal').dataset.dataUrl = dataUrl;
+  }
+
+  function wrapTextByWidth(ctx, text, maxWidth) {
+    const lines = [];
+    let current = '';
+    for (const ch of text) {
+      const test = current + ch;
+      if (ctx.measureText(test).width > maxWidth && current.length > 0) {
+        lines.push(current);
+        current = ch;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  $('download-share').addEventListener('click', () => {
+    const dataUrl = $('share-modal').dataset.dataUrl;
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `一字接龙_${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+  $('close-share').addEventListener('click', () => { $('share-modal').style.display = 'none'; });
+
+})();
+</script>
+</body>
+</html>
