@@ -2,8 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="一字接龙" />
+<meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)" />
 <title>一字接龙故事游戏</title>
+<link rel="manifest" href='data:application/json,{"name":"一字接龙故事游戏","short_name":"一字接龙","start_url":".","display":"standalone","background_color":"%23faf9f5","theme_color":"%23faf9f5","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect width=%22192%22 height=%22192%22 rx=%2240%22 fill=%22%23185fa5%22/%3E%3Ctext x=%2296%22 y=%22128%22 text-anchor=%22middle%22 font-size=%22112%22 fill=%22white%22 font-family=%22sans-serif%22 font-weight=%22500%22%3E字%3C/text%3E%3C/svg%3E","sizes":"192x192","type":"image/svg+xml"}]}' />
+<link rel="apple-touch-icon" href='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect width=%22192%22 height=%22192%22 rx=%2240%22 fill=%22%23185fa5%22/%3E%3Ctext x=%2296%22 y=%22128%22 text-anchor=%22middle%22 font-size=%22112%22 fill=%22white%22 font-family=%22sans-serif%22 font-weight=%22500%22%3E字%3C/text%3E%3C/svg%3E' />
 <style>
   :root {
     --bg: #faf9f5;
@@ -23,6 +30,8 @@
     --warn: #854f0b;
     --radius: 8px;
     --radius-lg: 12px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -41,7 +50,8 @@
       --warn: #fac775;
     }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: contain; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -49,43 +59,57 @@
     color: var(--text);
     line-height: 1.6;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 24px 16px;
+    padding: max(20px, var(--safe-top)) 16px max(20px, var(--safe-bottom));
+    -webkit-font-smoothing: antialiased;
   }
   .container { width: 100%; max-width: 560px; }
   h1 { font-size: 22px; font-weight: 500; margin: 0 0 24px; }
   h2 { font-size: 18px; font-weight: 500; margin: 0 0 16px; }
   p { margin: 0; }
+  /* Inputs at 16px to prevent iOS auto-zoom on focus */
   input[type="text"], input[type="password"], select {
     width: 100%;
-    padding: 8px 12px;
+    padding: 10px 12px;
+    border: 0.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-family: inherit;
+    height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%23888' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 10px 16px;
+    min-height: 44px;
     border: 0.5px solid var(--border);
     background: var(--surface);
     color: var(--text);
     border-radius: var(--radius);
     font-size: 15px;
     font-family: inherit;
-    height: 36px;
-  }
-  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button {
-    padding: 8px 16px;
-    border: 0.5px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    border-radius: var(--radius);
-    font-size: 14px;
-    font-family: inherit;
     cursor: pointer;
     transition: background 0.1s;
+    touch-action: manipulation;
   }
   button:hover:not(:disabled) { background: var(--surface-2); }
-  button:active:not(:disabled) { transform: scale(0.98); }
+  button:active:not(:disabled) { transform: scale(0.98); background: var(--surface-2); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   button.primary { background: var(--accent); color: white; border-color: var(--accent); }
   button.primary:hover:not(:disabled) { opacity: 0.9; background: var(--accent); }
+  button.primary:active:not(:disabled) { background: var(--accent); opacity: 0.8; }
   .label { font-size: 14px; color: var(--text-2); margin-bottom: 8px; }
   .row { display: flex; gap: 8px; }
   .stack > * + * { margin-top: 16px; }
@@ -95,12 +119,22 @@
   .success-text { color: var(--success); }
   .warn-text { color: var(--warn); }
 
+  .browser-warning {
+    background: var(--warn-bg);
+    color: var(--warn);
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
   #story-display {
     background: var(--surface-2);
     border-radius: var(--radius-lg);
     padding: 20px;
     min-height: 80px;
-    font-size: 18px;
+    font-size: 19px;
     line-height: 1.9;
     word-break: break-all;
   }
@@ -109,14 +143,17 @@
   .placeholder { color: var(--text-3); }
 
   #mic-btn {
-    width: 110px; height: 110px;
+    width: 140px; height: 140px;
     border-radius: 50%; padding: 0;
     display: flex; align-items: center; justify-content: center;
     user-select: none; -webkit-user-select: none;
-    touch-action: manipulation;
+    touch-action: none;
+    transition: transform 0.05s, background 0.1s;
   }
+  #mic-btn:active { transform: scale(0.95); }
   #mic-btn.recording { background: var(--danger-bg); border-color: var(--danger); }
-  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; }
+  #mic-btn.recording svg { color: var(--danger); }
+  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; }
 
   .scores-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .score-card { background: var(--surface-2); border-radius: var(--radius); padding: 14px; }
@@ -138,7 +175,59 @@
 
   .seed-row { display: flex; gap: 8px; align-items: stretch; }
   .seed-row input { flex: 1; }
-  .seed-row button { white-space: nowrap; padding: 0 12px; }
+  .seed-row button { white-space: nowrap; padding: 0 14px; flex-shrink: 0; }
+
+  .mode-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 4px;
+  }
+  .mode-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--text-2);
+    border-radius: 6px;
+    min-height: 36px;
+  }
+  .mode-tab.active {
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .mode-tab:hover:not(.active) { background: rgba(0,0,0,0.03); }
+
+  .qa-question-box {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    word-break: break-word;
+  }
+  .qa-question-box.has-question {
+    background: var(--accent-bg);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .qa-question-display-game {
+    background: var(--accent-bg);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
 
   .history-list { display: flex; flex-direction: column; gap: 8px; }
   .history-item {
@@ -148,23 +237,25 @@
     cursor: pointer;
     border: 0.5px solid transparent;
   }
-  .history-item:hover { border-color: var(--border); }
-  .history-item .meta { font-size: 12px; color: var(--text-3); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .history-item:hover, .history-item:active { border-color: var(--border); }
+  .history-item .meta { font-size: 12px; color: var(--text-3); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
   .history-item .text { font-size: 14px; line-height: 1.6; word-break: break-all; }
-  .history-empty { font-size: 13px; color: var(--text-3); text-align: center; padding: 24px; }
+  .history-empty { font-size: 14px; color: var(--text-3); text-align: center; padding: 32px 16px; }
 
-  details { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; }
-  details summary { cursor: pointer; color: var(--text-2); }
+  details { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; font-size: 14px; }
+  details summary { cursor: pointer; color: var(--text-2); padding: 4px 0; }
   details[open] summary { margin-bottom: 8px; }
   details ul { margin: 4px 0; padding-left: 20px; }
-  details li { margin: 4px 0; }
-  details code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  details li { margin: 6px 0; line-height: 1.6; }
+  details code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 13px; }
 
   .modal-backdrop {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.5);
     display: flex; align-items: center; justify-content: center;
-    padding: 20px; z-index: 100;
+    padding: 16px; z-index: 100;
+    padding-top: max(16px, var(--safe-top));
+    padding-bottom: max(16px, var(--safe-bottom));
   }
   .modal {
     background: var(--bg);
@@ -174,15 +265,26 @@
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .modal h2 { margin-bottom: 12px; }
 
-  #share-canvas-preview { max-width: 100%; border-radius: var(--radius); border: 0.5px solid var(--border); }
+  #share-canvas-preview { max-width: 100%; border-radius: var(--radius); border: 0.5px solid var(--border); display: block; }
+
+  /* Hide scrollbars on mobile but keep functional */
+  @media (max-width: 600px) {
+    h1 { font-size: 20px; margin-bottom: 20px; }
+    body { padding: max(16px, var(--safe-top)) 14px max(16px, var(--safe-bottom)); }
+    .row { gap: 8px; }
+    .modal { padding: 16px; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>一字接龙故事游戏</h1>
+
+  <div id="browser-warning" class="browser-warning" style="display: none;"></div>
 
   <!-- API key gate -->
   <div id="key-view" class="stack">
@@ -197,13 +299,13 @@
 
     <div>
       <div class="label">API Key</div>
-      <input type="password" id="api-key" placeholder="" autocomplete="off" />
+      <input type="password" id="api-key" placeholder="" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
       <p class="hint" style="margin-top: 6px;">仅保存在你浏览器的 localStorage，不上传任何服务器。</p>
     </div>
 
     <div>
       <div class="label">模型（可不填，用默认）</div>
-      <input type="text" id="model-input" placeholder="" />
+      <input type="text" id="model-input" placeholder="" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
       <p id="default-model-hint" class="hint" style="margin-top: 6px;"></p>
     </div>
 
@@ -214,9 +316,8 @@
       <summary>怎么拿 API Key？</summary>
       <ul>
         <li><strong>Anthropic</strong>：<code>console.anthropic.com</code> → API Keys → Create Key，以 <code>sk-ant-</code> 开头</li>
-        <li><strong>DeepSeek</strong>：<code>platform.deepseek.com</code> → API keys → 创建，以 <code>sk-</code> 开头。国内用户最方便，价格也最便宜</li>
+        <li><strong>DeepSeek</strong>：<code>platform.deepseek.com</code> → API keys → 创建，以 <code>sk-</code> 开头。国内用户最方便</li>
         <li><strong>OpenAI</strong>：<code>platform.openai.com</code> → API keys，以 <code>sk-</code> 开头</li>
-        <li>都是按 token 计费，玩一局成本几分钱</li>
       </ul>
     </details>
   </div>
@@ -225,13 +326,30 @@
   <div id="setup-view" class="stack" style="display: none;">
     <div id="provider-info" class="provider-display"></div>
 
-    <div>
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="story">📖 故事模式</button>
+      <button class="mode-tab" data-mode="qa">❓ 问答模式</button>
+    </div>
+
+    <!-- Story mode block -->
+    <div id="story-mode-block">
       <div class="label">启发词（可选）</div>
       <div class="seed-row">
-        <input type="text" id="seed-input" placeholder="比如：地铁、雨夜、外星人……" />
-        <button id="random-seed" title="随机生成一个启发词">🎲 随机</button>
+        <input type="text" id="seed-input" placeholder="比如：地铁、雨夜……" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        <button id="random-seed" title="随机生成一个启发词">🎲</button>
       </div>
       <p id="seed-status" class="hint" style="margin-top: 6px; min-height: 16px;"></p>
+    </div>
+
+    <!-- QA mode block -->
+    <div id="qa-mode-block" style="display: none;">
+      <div class="label">古怪问题（由 AI 生成）</div>
+      <div class="qa-question-box" id="qa-question-display">
+        <span style="color: var(--text-3);">点下方按钮让 AI 出一个问题</span>
+      </div>
+      <button id="generate-question" style="width: 100%; margin-top: 8px;">🎲 让 AI 出个问题</button>
+      <p id="qa-status" class="hint" style="margin-top: 6px; min-height: 16px;"></p>
     </div>
 
     <div>
@@ -245,15 +363,15 @@
     <div class="card">
       <div class="label" style="margin-bottom: 8px; font-weight: 500; color: var(--text);">先做两个检查</div>
       <div class="row">
-        <button id="test-mic" style="flex: 1;">🎤 测试麦克风</button>
-        <button id="test-tts" style="flex: 1;">🔊 测试 AI 说话</button>
+        <button id="test-mic" style="flex: 1;">🎤 测麦克风</button>
+        <button id="test-tts" style="flex: 1;">🔊 测说话</button>
       </div>
       <p id="test-result" class="test-result"></p>
     </div>
 
     <div class="row">
-      <button id="show-history" style="flex: 1;">📖 我的故事集</button>
-      <button id="change-key" style="flex: 1; font-size: 12px;">更换平台 / Key</button>
+      <button id="show-history" style="flex: 1;">📖 故事集</button>
+      <button id="change-key" style="flex: 1;">⚙️ 换 Key</button>
     </div>
   </div>
 
@@ -263,6 +381,8 @@
       <span id="seed-display" class="seed-display"></span>
       <span id="turn-indicator" class="turn-indicator"></span>
     </div>
+
+    <div id="game-question-display" class="qa-question-display-game" style="display: none;"></div>
     
     <div id="story-display">
       <span class="placeholder">故事将在这里展开……</span>
@@ -271,13 +391,13 @@
     <div id="player-input-row" style="display: none;">
       <div class="mic-area">
         <button id="mic-btn">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="2" width="6" height="12" rx="3"></rect>
             <path d="M5 10v2a7 7 0 0 0 14 0v-2"></path>
             <line x1="12" y1="19" x2="12" y2="22"></line>
           </svg>
         </button>
-        <p id="mic-hint" class="hint" style="font-size: 13px; color: var(--text-2);">按住说话，松开识别</p>
+        <p id="mic-hint" class="hint" style="font-size: 14px; color: var(--text-2);">按住说话，松开识别</p>
         <p id="mic-heard" class="hint" style="min-height: 18px;"></p>
       </div>
     </div>
@@ -298,7 +418,7 @@
   <div id="result-view" class="stack" style="display: none;">
     <div class="card">
       <div class="label" style="margin-bottom: 8px;">最终故事</div>
-      <p id="final-story" style="font-size: 18px; line-height: 1.9;"></p>
+      <p id="final-story" style="font-size: 18px; line-height: 1.9; word-break: break-all;"></p>
     </div>
     
     <div id="scores-grid" class="scores-grid"></div>
@@ -309,8 +429,8 @@
     </div>
 
     <div class="row">
-      <button id="save-story" style="flex: 1;">💾 保存到故事集</button>
-      <button id="share-story" style="flex: 1;">🖼️ 生成分享图</button>
+      <button id="save-story" style="flex: 1;">💾 保存</button>
+      <button id="share-story" style="flex: 1;">🖼️ 分享图</button>
     </div>
     <p id="save-status" class="hint" style="text-align: center; min-height: 16px;"></p>
     
@@ -321,7 +441,7 @@
   <div id="history-view" class="stack" style="display: none;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h2 style="margin: 0;">我的故事集</h2>
-      <button id="back-from-history" style="font-size: 13px;">← 返回</button>
+      <button id="back-from-history" style="font-size: 14px; padding: 6px 12px; min-height: 36px;">← 返回</button>
     </div>
     <div id="history-list" class="history-list"></div>
   </div>
@@ -330,10 +450,10 @@
   <div id="share-modal" class="modal-backdrop" style="display: none;">
     <div class="modal">
       <h2>分享图</h2>
-      <p class="hint" style="margin-bottom: 12px;">长按或右键图片可保存</p>
+      <p class="hint" style="margin-bottom: 12px;">手机长按图片可保存到相册</p>
       <img id="share-canvas-preview" alt="分享图预览" />
       <div class="row" style="margin-top: 16px;">
-        <button id="download-share" class="primary" style="flex: 1;">下载图片</button>
+        <button id="download-share" class="primary" style="flex: 1;">下载</button>
         <button id="close-share" style="flex: 1;">关闭</button>
       </div>
     </div>
@@ -344,10 +464,10 @@
     <div class="modal">
       <h2>故事详情</h2>
       <div id="detail-content"></div>
-      <div class="row" style="margin-top: 16px;">
-        <button id="detail-share" style="flex: 1;">🖼️ 生成分享图</button>
-        <button id="detail-delete" style="flex: 1;">🗑️ 删除</button>
-        <button id="detail-close" style="flex: 1;">关闭</button>
+      <div class="row" style="margin-top: 16px; flex-wrap: wrap;">
+        <button id="detail-share" style="flex: 1; min-width: 90px;">🖼️ 分享图</button>
+        <button id="detail-delete" style="flex: 1; min-width: 90px;">🗑️ 删除</button>
+        <button id="detail-close" style="flex: 1; min-width: 90px;">关闭</button>
       </div>
     </div>
   </div>
@@ -355,6 +475,35 @@
 
 <script>
 (function() {
+  // ---------- Browser detection ----------
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isIOSSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  const isIOSChrome = isIOS && /CriOS/.test(ua);
+  const isAndroidChrome = /Android/.test(ua) && /Chrome/.test(ua);
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const synth = window.speechSynthesis;
+
+  // Show browser-specific warnings
+  const warningEl = document.getElementById('browser-warning');
+  if (isIOSSafari) {
+    warningEl.style.display = 'block';
+    warningEl.innerHTML = '⚠️ iOS Safari 不支持语音识别。请用 <strong>Chrome</strong> 浏览器打开（在 App Store 下载），或在电脑上玩。';
+  } else if (isIOSChrome) {
+    warningEl.style.display = 'block';
+    warningEl.innerHTML = '⚠️ iOS Chrome 对语音识别支持不完整。如果按住麦克风没反应，建议用安卓手机或电脑 Chrome。';
+  } else if (!SR) {
+    warningEl.style.display = 'block';
+    warningEl.innerHTML = '⚠️ 你的浏览器不支持语音识别。建议用 <strong>桌面 Chrome</strong> 或 <strong>安卓 Chrome</strong>。';
+  }
+
+  // ---------- Haptic feedback ----------
+  function haptic(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms || 15);
+  }
+
   // ---------- Provider configs ----------
   const PROVIDERS = {
     anthropic: {
@@ -382,7 +531,7 @@
       defaultModel: 'deepseek-chat',
       keyPrefix: 'sk-',
       keyPlaceholder: 'sk-...',
-      modelPlaceholder: 'deepseek-chat (默认) 或 deepseek-reasoner',
+      modelPlaceholder: 'deepseek-chat 或 deepseek-reasoner',
       buildHeaders: (key) => ({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${key}`
@@ -400,7 +549,7 @@
       defaultModel: 'gpt-4o-mini',
       keyPrefix: 'sk-',
       keyPlaceholder: 'sk-...',
-      modelPlaceholder: 'gpt-4o-mini (默认) 或 gpt-4o',
+      modelPlaceholder: 'gpt-4o-mini 或 gpt-4o',
       buildHeaders: (key) => ({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${key}`
@@ -413,45 +562,61 @@
     }
   };
 
-  // ---------- Seed words pool ----------
+  // 故事模式启发词:文艺氛围词 + 反文艺日常词,让骰子有概率打破"小说腔"
   const SEED_WORDS = [
-    // Time/atmosphere
+    // 时间氛围
     '凌晨三点', '雨夜', '深秋', '盛夏正午', '冬至', '黎明前',
-    // Places
+    // 地点
     '地铁', '便利店', '老电梯', '海边小镇', '废弃游乐场', '山顶咖啡馆', '末班车', '机场', '天台', '澡堂',
-    // Events
+    // 事件(文艺向)
     '分手那天', '搬家', '同学会', '相亲', '辞职信', '体检报告', '生日', '走丢的猫', '跨年',
-    // Speculative
+    // 奇幻
     '末日', '外星人', '时光机', '神秘快递', '会说话的冰箱', '复制人', '平行宇宙', '记忆消除',
-    // Characters
+    // 人物
     '室友', '前任', '快递员', '出租车司机', '占卜师', '夜班保安', '失忆者', '邻居家小孩',
-    // Objects
+    // 物件
     '一封旧信', '陌生钥匙', '没拍完的胶卷', '过期罐头', '别人的日记本', '掉色的合影',
-    // Emotional
-    '后悔', '想念', '忽然想起', '装作没看见', '其实早就知道'
+    // 情绪
+    '后悔', '想念', '忽然想起', '装作没看见', '其实早就知道',
+    // 反文艺日常向(打破小说腔)
+    '退货', '忘记冲马桶', '相亲对象放屁', '猫拉了', '排队', '被领导加微信', '体检前一天',
+    '抢不到地铁座位', '打工', '加班到十一点', '点外卖', '快递柜满了', '电梯里的尴尬',
+    '挤痘痘', '半夜饿了', '充电线坏了', '微信置顶', '同事的婚礼', '过年回家',
+    '减肥失败', '下楼倒垃圾', '健身房办了卡', '抢红包', '打车', '家长群'
   ];
-
   function randomSeed(exclude) {
     const pool = SEED_WORDS.filter(w => w !== exclude);
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // 问答模式 fallback 问题(API 失败时使用)
+  const FALLBACK_QUESTIONS = [
+    '为什么洗澡时总会想起白天忘了回的消息?',
+    '袜子在洗衣机里到底去了哪里?',
+    '猫为什么觉得纸箱比你买的猫窝好?',
+    '为什么明明很困却舍不得睡?',
+    '微信对话框打了又删的那段话,去了哪里?',
+    '为什么周日晚上的饭最难吃?',
+    '等红灯时看的那个陌生人,他在想什么?',
+    '为什么越想睡着越睡不着?',
+    '谁规定了筷子要放右边?',
+    '为什么打哈欠会传染?'
+  ];
+
   const STORAGE_KEY = 'word_relay_provider_config_v1';
   const HISTORY_KEY = 'word_relay_history_v1';
   const STATE = {
     provider: 'anthropic',
-    apiKey: '',
-    model: '',
-    seed: '',
-    story: [],
+    apiKey: '', model: '',
+    mode: 'story',          // 'story' | 'qa'
+    seed: '',               // story 模式的启发词
+    question: '',           // qa 模式的问题
+    story: [],              // 字数组(qa 模式里就是"答案"的字)
     turn: 'player',
-    minLength: 8,
-    maxLength: 60,
-    listening: false,
-    recognition: null,
-    lastTranscript: '',
-    lastResult: null, // {scores, comment} for sharing
-    detailViewingId: null,
+    minLength: 8, maxLength: 60,
+    listening: false, recognition: null, lastTranscript: '',
+    lastResult: null, detailViewingId: null,
+    inputLocked: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -461,10 +626,6 @@
   const resultView = $('result-view');
   const historyView = $('history-view');
 
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const synth = window.speechSynthesis;
-
-  // ---------- Provider UI sync ----------
   function updateProviderUI() {
     const p = PROVIDERS[$('provider-select').value];
     $('api-key').placeholder = p.keyPlaceholder;
@@ -474,7 +635,6 @@
   $('provider-select').addEventListener('change', updateProviderUI);
   updateProviderUI();
 
-  // ---------- Load saved config ----------
   const savedRaw = localStorage.getItem(STORAGE_KEY);
   if (savedRaw) {
     try {
@@ -488,7 +648,6 @@
     } catch (e) {}
   }
 
-  // ---------- Save key + connectivity test ----------
   $('save-key').addEventListener('click', async () => {
     const provider = $('provider-select').value;
     const key = $('api-key').value.trim();
@@ -505,8 +664,6 @@
     if (!key.startsWith(p.keyPrefix)) {
       if (!confirm(`Key 通常以 ${p.keyPrefix} 开头，你的不是。继续吗？`)) return;
     }
-
-    // Temporarily set state for the test call
     STATE.provider = provider;
     STATE.apiKey = key;
     STATE.model = model;
@@ -518,7 +675,6 @@
 
     try {
       const reply = await callLLM('回复"ok"两个字符，不要任何其他内容。', 20);
-      // Success
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ provider, apiKey: key, model }));
       result.className = 'test-result success-text';
       result.textContent = `✓ 连接成功（模型回复：${reply.substring(0, 20)}）`;
@@ -557,15 +713,89 @@
     $('provider-info').textContent = `当前使用：${p.name} · ${modelName}`;
   }
 
-  // ---------- Random seed ----------
   $('random-seed').addEventListener('click', () => {
     const current = $('seed-input').value.trim();
     const newSeed = randomSeed(current);
     $('seed-input').value = newSeed;
-    $('seed-status').textContent = `已随机选中：${newSeed}（可继续点骰子换一个）`;
+    $('seed-status').textContent = `已随机选中：${newSeed}（再点骰子换一个）`;
+    haptic(10);
   });
 
-  // ---------- Unified API call ----------
+  // ---------- Mode tabs ----------
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const mode = tab.dataset.mode;
+      STATE.mode = mode;
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      $('story-mode-block').style.display = mode === 'story' ? 'block' : 'none';
+      $('qa-mode-block').style.display = mode === 'qa' ? 'block' : 'none';
+      haptic(8);
+    });
+  });
+
+  // ---------- QA: generate question ----------
+  $('generate-question').addEventListener('click', async () => {
+    const btn = $('generate-question');
+    const display = $('qa-question-display');
+    const status = $('qa-status');
+    btn.disabled = true;
+    btn.textContent = '生成中…';
+    status.className = 'hint';
+    status.textContent = '';
+
+    const questionPrompt = `请生成一个适合"一字接龙游戏"的古怪问题。
+
+【这是什么】玩家和 AI 看到这个问题后，会一字一字地共同接出一个回答。
+
+【好问题的标准】
+- 表面是日常的生活观察（不要科学陷阱、不要哲学难题）
+- 大家都经历过、但平常没认真问过
+- 仔细想一下又有点意思
+- 不是非黑即白的事实题，而是有发挥空间的开放题
+
+【风格示例】
+✓ 好的问题：
+- 为什么洗澡时总会想起白天忘了回的消息？
+- 袜子在洗衣机里到底去了哪里？
+- 猫为什么觉得纸箱比你买的猫窝好？
+- 为什么明明很困却舍不得睡？
+- 微信对话框打了又删的那段话，去了哪里？
+- 为什么周日晚上的饭最难吃？
+- 等红灯时看的那个陌生人，他在想什么？
+- 如果蚊子开口跟你借十块钱，你借不借？
+- 你家洗衣机的工作热情比你高吗？
+
+✗ 不要的问题：
+- "为什么云是软的但摔下来会死人"（理科陷阱）
+- "什么是爱"（太抽象哲学）
+- "1+1为什么等于2"（无聊）
+- "如何看待xxx"（正经议论）
+
+【格式】只输出一句疑问句，不要任何前缀、解释、引号。问题长度 10-30 个字。`;
+
+    try {
+      const text = await callLLM(questionPrompt, 100);
+      const cleaned = text.trim().replace(/^["'「『]|["'」』]$/g, '').replace(/\n/g, '');
+      STATE.question = cleaned;
+      display.textContent = cleaned;
+      display.classList.add('has-question');
+      btn.textContent = '🎲 换一个问题';
+      btn.disabled = false;
+      haptic(15);
+    } catch (err) {
+      // fallback to local pool
+      const fallback = FALLBACK_QUESTIONS[Math.floor(Math.random() * FALLBACK_QUESTIONS.length)];
+      STATE.question = fallback;
+      display.textContent = fallback;
+      display.classList.add('has-question');
+      status.className = 'hint warn-text';
+      status.textContent = `AI 生成失败（${err.message.substring(0, 60)}），用了本地词库一个`;
+      btn.textContent = '🎲 换一个问题';
+      btn.disabled = false;
+    }
+  });
+
   async function callLLM(prompt, maxTokens) {
     const p = PROVIDERS[STATE.provider];
     const model = STATE.model || p.defaultModel;
@@ -582,7 +812,6 @@
     return p.parseResponse(data);
   }
 
-  // ---------- TTS ----------
   function speakChar(text) {
     if (!synth) return;
     try {
@@ -599,14 +828,13 @@
   }
   if (synth) synth.onvoiceschanged = () => {};
 
-  // ---------- Test buttons ----------
   $('test-mic').addEventListener('click', async () => {
     const result = $('test-result');
     result.className = 'test-result';
     result.textContent = '请求麦克风权限中…';
     if (!SR) {
       result.className = 'test-result warn-text';
-      result.textContent = '此浏览器不支持语音识别。建议桌面 Chrome。';
+      result.textContent = '此浏览器不支持语音识别';
       return;
     }
     try {
@@ -617,11 +845,11 @@
     } catch (err) {
       result.className = 'test-result danger-text';
       if (err.name === 'NotAllowedError') {
-        result.textContent = '✗ 权限被拒。点击地址栏锁图标 → 麦克风 → 允许';
+        result.textContent = '✗ 权限被拒。在浏览器设置里允许麦克风';
       } else if (err.name === 'NotFoundError') {
-        result.textContent = '✗ 未检测到麦克风设备';
+        result.textContent = '✗ 未检测到麦克风';
       } else {
-        result.textContent = `✗ ${err.name}: ${err.message}`;
+        result.textContent = `✗ ${err.name}`;
       }
     }
   });
@@ -634,15 +862,14 @@
       return;
     }
     result.className = 'test-result';
-    result.textContent = '正在播放…（如听不到请检查系统音量）';
+    result.textContent = '正在播放…（如听不到请检查音量）';
     speakChar('你好');
     setTimeout(() => {
       result.className = 'test-result success-text';
-      result.textContent = '✓ 如果听到"你好"，AI 说话功能正常';
+      result.textContent = '✓ 听到"你好"就正常';
     }, 1500);
   });
 
-  // ---------- Speech recognition ----------
   function createRecognition() {
     if (!SR) return null;
     const rec = new SR();
@@ -653,19 +880,39 @@
     return rec;
   }
 
-  // ---------- Game flow ----------
   $('player-first').addEventListener('click', () => startGame('player'));
   $('ai-first').addEventListener('click', () => startGame('ai'));
 
   function startGame(firstPlayer) {
-    STATE.seed = $('seed-input').value.trim();
+    if (STATE.mode === 'qa') {
+      if (!STATE.question) {
+        const status = $('qa-status');
+        status.className = 'hint danger-text';
+        status.textContent = '请先点"让 AI 出个问题"生成一个问题';
+        haptic([20, 50, 20]);
+        return;
+      }
+      STATE.seed = ''; // qa 模式不用 seed
+    } else {
+      STATE.seed = $('seed-input').value.trim();
+      STATE.question = '';
+    }
     STATE.story = [];
     STATE.turn = firstPlayer;
     STATE.lastResult = null;
     setupView.style.display = 'none';
     resultView.style.display = 'none';
     gameView.style.display = 'block';
-    $('seed-display').textContent = STATE.seed ? `启发词：${STATE.seed}` : '自由发挥';
+
+    if (STATE.mode === 'qa') {
+      $('seed-display').textContent = '问答模式';
+      $('game-question-display').style.display = 'block';
+      $('game-question-display').textContent = STATE.question;
+    } else {
+      $('seed-display').textContent = STATE.seed ? `启发词：${STATE.seed}` : '自由发挥';
+      $('game-question-display').style.display = 'none';
+    }
+
     renderStory();
     nextTurn();
   }
@@ -712,13 +959,17 @@
     return JSON.parse(s);
   }
 
-  // ---------- Mic ----------
+  // ---------- Mic with unified pointer events ----------
   const micBtn = $('mic-btn');
   const micHint = $('mic-hint');
   const micHeard = $('mic-heard');
 
   function startListening() {
-    if (!SR || STATE.listening) return;
+    if (!SR) {
+      micHeard.textContent = '此浏览器不支持语音识别';
+      return;
+    }
+    if (STATE.listening) return;
     STATE.recognition = createRecognition();
     if (!STATE.recognition) return;
     STATE.lastTranscript = '';
@@ -730,9 +981,11 @@
     };
     STATE.recognition.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        micHeard.textContent = '麦克风权限被拒，请检查浏览器设置';
+        micHeard.textContent = '麦克风权限被拒，请在浏览器设置里允许';
       } else if (e.error === 'no-speech') {
         micHeard.textContent = '没听清，再来一次';
+      } else if (e.error === 'aborted') {
+        // user-initiated stop, ignore
       } else {
         micHeard.textContent = `识别出错：${e.error}`;
       }
@@ -753,6 +1006,7 @@
       micBtn.classList.add('recording');
       micHint.textContent = '正在听…松开结束';
       micHeard.textContent = '';
+      haptic(15);
     } catch (err) {
       micHeard.textContent = `启动失败：${err.message}`;
     }
@@ -760,6 +1014,7 @@
 
   function stopListening() {
     if (!STATE.recognition || !STATE.listening) return;
+    haptic(10);
     try { STATE.recognition.stop(); } catch (err) {}
   }
 
@@ -777,35 +1032,113 @@
     setTimeout(() => nextTurn(), 500);
   }
 
-  micBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startListening(); });
-  micBtn.addEventListener('mouseup', (e) => { e.preventDefault(); stopListening(); });
-  micBtn.addEventListener('mouseleave', () => { if (STATE.listening) stopListening(); });
-  micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startListening(); }, { passive: false });
-  micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopListening(); }, { passive: false });
-  micBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopListening(); });
+  // Pointer events unify mouse + touch + pen, avoiding double-fire
+  if (window.PointerEvent) {
+    micBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      micBtn.setPointerCapture(e.pointerId);
+      startListening();
+    });
+    micBtn.addEventListener('pointerup', (e) => {
+      e.preventDefault();
+      stopListening();
+    });
+    micBtn.addEventListener('pointercancel', () => {
+      if (STATE.listening) stopListening();
+    });
+  } else {
+    // Fallback for very old browsers
+    micBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startListening(); });
+    micBtn.addEventListener('mouseup', (e) => { e.preventDefault(); stopListening(); });
+    micBtn.addEventListener('mouseleave', () => { if (STATE.listening) stopListening(); });
+    micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startListening(); }, { passive: false });
+    micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopListening(); }, { passive: false });
+    micBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopListening(); });
+  }
   micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // ---------- AI turn ----------
   async function aiTurn() {
     const currentStory = STATE.story.map(s => s.char).join('');
-    const styles = ['老实接（让故事顺畅推进）', '搞乱接（制造转折或意外）', '随便接（加入新元素或新角色）'];
+    const storyLength = STATE.story.length;
+    const canEnd = storyLength >= STATE.minLength;
+
+    // 阶段判断
+    let phase;
+    if (storyLength === 0) phase = 'opening-first';
+    else if (storyLength <= 3) phase = 'opening-build';
+    else if (storyLength <= 20) phase = 'middle';
+    else phase = 'closing';
+
+    const phaseGuide = {
+      'opening-first': `这是${STATE.mode === 'qa' ? '回答' : '故事'}的第一个字，你要起势。
+
+✓ 好的开局字必须能"打开一个画面或一个动作"：
+   - 实词：雨/门/她/我/他/三/红/夜/狗/血/电话/猫
+   - 叙事性介词：在/当/有/从/那（"在城市的边缘""当我醒来""有个人""从来没"）
+   - 能引出后文的代词或数词：我/她/那/一/三/这
+
+✗ 不好的开局字是"自己孤立时没有方向感"的字：
+   - 结构助词（的/了/着/过/地/得）——它们需要前文才有意义
+   - 系词（是）——单独起头会像填空题
+   - 标点——${STATE.mode === 'qa' ? '回答' : '故事'}还没开始就打节拍器`,
+
+      'opening-build': `${STATE.mode === 'qa' ? '回答' : '故事'}刚开始，帮它建立场景或角色。接的字要让下一个人有东西可接。`,
+
+      'middle': `进行中，你的字要让事情发生。避免拖延性的字（无意义的"的""了""着""过"等结构助词，除非语法上确实需要）。`,
+
+      'closing': `字数已经较多，可以开始往收尾方向走。但不要急着画句号——${STATE.mode === 'qa' ? '一个回答' : '一个故事'}的"完整"是叙事完整，不是字数到了。`
+    };
+
+    const styles = ['顺接', '抬升', '转折'];
     const chosenStyle = styles[Math.floor(Math.random() * styles.length)];
-    const canEnd = STATE.story.length >= STATE.minLength;
+    const styleGuide = {
+      '顺接': '让内容自然地往前走一小步，语义和前文严丝合缝。这不是平庸，是把舞台稳稳搭好。',
+      '抬升': '在前文基础上加入一个新的意象、动作或细节，让内容有推进感。"yes, and"——承接，然后加一点东西。',
+      '转折': '制造一个轻微的转折——意外的对象、突然的角度切换、出人意料的下一秒。注意是"轻微"转折，不是把前文推翻。'
+    };
 
-    const prompt = `你在玩一字接龙故事游戏。每个人轮流贡献一个汉字（或一个标点），拼成故事。
+    let contextBlock;
+    if (STATE.mode === 'qa') {
+      contextBlock = `这是问答模式。问题是：「${STATE.question}」
+你和玩家正在一字一字地共同回答这个问题。
+目前的回答：「${currentStory || '(空)'}」`;
+    } else {
+      contextBlock = `${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前的故事：「${currentStory || '(空)'}」`;
+    }
 
-${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前故事：「${currentStory}」
+    const completeRule = STATE.mode === 'qa'
+      ? (canEnd ? '可以判定为完整，但只有当回答真的形成了一个对问题的有意义答复时才设 true。字数到了不等于回答完整。' : '当前字数不足，complete 必须为 false。')
+      : (canEnd ? '可以判定为完整，但只有当前文真的形成了一个有起承转合的小故事时才设 true。字数到了不等于故事完整。' : '当前字数不足，complete 必须为 false。');
 
-轮到你接一个字。本回合风格：${chosenStyle}
+    const prompt = `你正在和一个人即兴玩"一字接龙"游戏。规则：你们轮流贡献一个汉字（或一个标点），拼出一段内容。
 
-注意：玩家是语音输入，可能有同音字误识别，请宽容理解上下文。
+这不是普通的接龙——这是即兴喜剧训练的变体。核心精神是"yes, and"：承接对方刚才给出的字，然后往前推进一小步。不是要炫技，是要让内容活起来。
+
+${contextBlock}
+当前字数：${storyLength} / 60（硬上限）
+
+【你这一回合的任务】
+${phaseGuide[phase]}
+
+【本回合风格：${chosenStyle}】
+${styleGuide[chosenStyle]}
+
+【硬性规则】
+1. 默认接汉字。只有这两种情况才允许接标点：
+   - 接逗号：前文是一个完整小句、需要换气。一局最多接 1-2 次逗号。
+   - 接句号/感叹号/问号：仅在 ${canEnd ? '当前字数已≥8 且确实有自然收束感' : '【本回合不允许】因为字数还不够'} 时。
+2. 严禁的偷懒接法：
+   - 不要在没有明确需要时接结构助词（"的""了""地""得"虽然有用但很容易变成填充字）
+   - 不要因为"接什么都行"就接最常见的虚词
+   - 不要重复前文已经出现过的字，除非情节需要
+3. 接的字必须是单个字符，不要写两个字。
+4. 玩家是语音输入，可能有同音字误识别，请宽容理解上下文。
+
+【判断是否完整】
+${completeRule}
 
 严格按 JSON 格式回复，不要 markdown 代码块，不要任何解释文字，只输出 JSON 对象本身：
-{"char": "接的字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话理由"}
-
-要求：
-- char 只能是一个字符（汉字或标点）
-- ${canEnd ? '故事超过 30 字且有明显结尾感时，complete 设为 true' : 'complete 必须为 false'}`;
+{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说明你为什么接这个字，包括它和前文的关系"}`;
 
     try {
       const text = await callLLM(prompt, 300);
@@ -825,7 +1158,7 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前故事：「${currentSto
     } catch (err) {
       console.error('AI turn error:', err);
       $('ai-thinking').style.display = 'none';
-      alert(`AI 出错了：${err.message}\n\n如果是 401 错误，可能 API key 无效，请重新输入。`);
+      alert(`AI 出错了：${err.message}`);
       STATE.turn = 'player';
       nextTurn();
     }
@@ -846,8 +1179,25 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前故事：「${currentSto
     gameView.style.display = 'none';
     resultView.style.display = 'none';
     $('save-status').textContent = '';
+    $('save-story').disabled = false;
     setupView.style.display = 'block';
   }
+
+  // Score dimensions for each mode
+  const SCORE_DIMS = {
+    story: [
+      { key: 'fluency', label: '流畅度' },
+      { key: 'surprise', label: '趣味/意外' },
+      { key: 'completeness', label: '完整性' },
+      { key: 'rescue', label: '玩家救场' },
+    ],
+    qa: [
+      { key: 'on_topic', label: '切题度' },
+      { key: 'creativity', label: '脑洞' },
+      { key: 'logic', label: '逻辑感' },
+      { key: 'rescue', label: '玩家救场' },
+    ]
+  };
 
   async function endGame() {
     if (STATE.recognition && STATE.listening) {
@@ -857,44 +1207,115 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前故事：「${currentSto
     gameView.style.display = 'none';
     resultView.style.display = 'block';
     $('save-status').textContent = '';
+    $('save-story').disabled = false;
 
     const finalStory = STATE.story.map(s => s.char).join('');
     $('final-story').textContent = finalStory || '（什么也没发生）';
 
-    $('scores-grid').innerHTML = `
-      <div class="score-card"><div class="label">流畅度</div><div class="value" style="color: var(--text-3);">…</div></div>
-      <div class="score-card"><div class="label">趣味/意外</div><div class="value" style="color: var(--text-3);">…</div></div>
-      <div class="score-card"><div class="label">完整性</div><div class="value" style="color: var(--text-3);">…</div></div>
-      <div class="score-card"><div class="label">玩家救场</div><div class="value" style="color: var(--text-3);">…</div></div>
-    `;
-    $('ai-comment').textContent = '正在品味这个故事……';
+    const dims = SCORE_DIMS[STATE.mode];
+    $('scores-grid').innerHTML = dims.map(d =>
+      `<div class="score-card"><div class="label">${d.label}</div><div class="value" style="color: var(--text-3);">…</div></div>`
+    ).join('');
+    $('ai-comment').textContent = STATE.mode === 'qa' ? '正在品味这个回答……' : '正在品味这个故事……';
 
     if (STATE.story.length === 0) {
-      $('ai-comment').textContent = '故事还没开始就结束了。';
+      $('ai-comment').textContent = STATE.mode === 'qa' ? '回答还没开始就结束了。' : '故事还没开始就结束了。';
       $('scores-grid').innerHTML = '';
       return;
     }
 
     const annotated = STATE.story.map(s => `${s.char}(${s.by === 'player' ? '玩家' : 'AI'})`).join('');
-    const scorePrompt = `你是一字接龙故事游戏的评分员。玩家和 AI 轮流贡献一个字（玩家是语音输入，可能有同音字误识别）。
+
+    let scorePrompt;
+    if (STATE.mode === 'qa') {
+      scorePrompt = `你是一字接龙问答游戏的评分员。玩家和 AI 轮流贡献一个字（玩家是语音输入，可能有同音字误识别——评分时对此宽容）。这不是写作比赛，是即兴游戏，目标是看两个人能不能在限制下共同回答一个古怪的问题。
+
+【背景】
+问题：「${STATE.question}」
+他们的回答：「${STATE.story.map(s => s.char).join('')}」
+每字归属：${annotated}
+
+【评分标准——四个维度，每项 0-10】
+
+1. 切题度
+   - 9-10：回答确实在回应问题，哪怕角度刁钻也立得住
+   - 6-8：基本回应了，但有些游离
+   - 3-5：跑题严重，只沾了点边
+   - 0-2：完全答非所问
+
+2. 脑洞
+   - 9-10：角度出人意料、有意思的联想或类比
+   - 6-8：有一两处想法不错
+   - 3-5：很标准很套路
+   - 0-2：无聊
+
+3. 逻辑感
+   - 9-10：回答内部自洽，能读通且有内在逻辑
+   - 6-8：基本读通，偶有断裂
+   - 3-5：句子层面有语病或跳跃
+   - 0-2：基本读不通
+
+4. 玩家救场
+   - 9-10：玩家在 AI 接出怪字、跑偏、卡住时，接出了非常巧妙的字救回来
+   - 6-8：玩家接的字都合理，有个别亮点
+   - 3-5：玩家接得普通
+   - 0-2：玩家接的字让回答更乱
+
+【重要】
+- 不要怕给低分。一个普通回答就该是 5-7 分，留出 8-10 给真正出彩的。
+- 不要平均化。某项明显很差就给低分。
+- 点评必须具体——指出回答里哪个字、哪个组合好或不好。不要说"很有创意"这种空话。
+
+严格按 JSON 格式回复，不要 markdown，不要任何解释文字，只输出 JSON 对象本身：
+{"on_topic": 数字, "creativity": 数字, "logic": 数字, "rescue": 数字, "comment": "2-3句话点评，必须具体提到回答里的字或转折，语气可以幽默"}`;
+    } else {
+      scorePrompt = `你是一字接龙故事游戏的评分员。玩家和 AI 轮流贡献一个字（玩家是语音输入，可能有同音字误识别——评分时对此宽容）。这不是写作比赛，是即兴游戏，目标是看两个人能不能在限制下共同造出一个有趣的小故事。
 
 ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.story.map(s => s.char).join('')}」
 每字归属：${annotated}
 
-四维度评分（0-10）+ 总点评：
-1. 流畅度：通顺、连贯（同音字宽容）
-2. 趣味/意外性：有让人会心一笑的转折
-3. 完整性：有头有尾
-4. 玩家救场：玩家接字时上下文有多难、ta接得有多巧
+【评分标准——四个维度，每项 0-10】
+
+1. 流畅度
+   - 9-10：读起来像一段自然的中文，标点节奏合理
+   - 6-8：能读通，偶有拗口
+   - 3-5：有明显语病或断裂
+   - 0-2：基本读不通
+
+2. 趣味/意外性
+   - 9-10：有让人会心一笑的转折、巧妙的双关、意外的画面感
+   - 6-8：有一两处有意思的地方
+   - 3-5：平庸、套路化、像 AI 写的标准小说开头
+   - 0-2：无聊乏味
+
+3. 完整性
+   - 9-10：有清晰的开端、发展和结束，像一个真正的微型故事
+   - 6-8：有头有尾但中间薄弱，或结尾仓促
+   - 3-5：只是一个片段，没有故事感
+   - 0-2：像随机字串
+
+4. 玩家救场
+   - 9-10：玩家在 AI 接出怪字、跑偏、卡住时，接出了非常巧妙的字救回来
+   - 6-8：玩家接的字都合理，有个别亮点
+   - 3-5：玩家接得普通，没有出彩也没有失误
+   - 0-2：玩家接的字让故事更乱
+
+【重要】
+- 不要怕给低分。一个普通故事就该是 5-7 分，留出 8-10 给真正出彩的。
+- 不要平均化。某项明显很差就给低分。
+- 点评必须具体——指出故事里哪个字、哪个转折好或不好。不要说"很有创意"这种空话。
 
 严格按 JSON 格式回复，不要 markdown，不要任何解释文字，只输出 JSON 对象本身：
-{"fluency": 数字, "surprise": 数字, "completeness": 数字, "rescue": 数字, "comment": "2-3句话点评，要具体提到故事里的某个字或转折，可以幽默"}`;
+{"fluency": 数字, "surprise": 数字, "completeness": 数字, "rescue": 数字, "comment": "2-3句话点评，必须具体提到故事里的某个字或转折，语气可以幽默"}`;
+    }
 
     try {
       const text = await callLLM(scorePrompt, 800);
       const parsed = extractJSON(text);
+      // 标记这个 result 是哪种模式的，方便历史回看时正确渲染
+      parsed._mode = STATE.mode;
       STATE.lastResult = parsed;
-      renderScores(parsed);
+      renderScores(parsed, STATE.mode);
     } catch (err) {
       console.error('Scoring error:', err);
       $('ai-comment').textContent = `评分失败：${err.message}`;
@@ -902,13 +1323,8 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     }
   }
 
-  function renderScores(s) {
-    const dims = [
-      { key: 'fluency', label: '流畅度' },
-      { key: 'surprise', label: '趣味/意外' },
-      { key: 'completeness', label: '完整性' },
-      { key: 'rescue', label: '玩家救场' },
-    ];
+  function renderScores(s, mode) {
+    const dims = SCORE_DIMS[mode || s._mode || 'story'];
     const total = dims.reduce((sum, d) => sum + (Number(s[d.key]) || 0), 0);
     const avg = (total / dims.length).toFixed(1);
 
@@ -929,7 +1345,7 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     $('ai-comment').textContent = s.comment || '（AI 没说话）';
   }
 
-  // ---------- History (save/load/delete) ----------
+  // ---------- History ----------
   function loadHistory() {
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
@@ -947,7 +1363,9 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     const entry = {
       id: 'story_' + Date.now(),
       timestamp: Date.now(),
+      mode: STATE.mode,
       seed: STATE.seed,
+      question: STATE.question,
       story: STATE.story.slice(),
       result: STATE.lastResult,
     };
@@ -956,6 +1374,7 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     $('save-status').className = 'hint success-text';
     $('save-status').textContent = '✓ 已保存到故事集';
     $('save-story').disabled = true;
+    haptic(15);
   });
 
   $('show-history').addEventListener('click', () => {
@@ -973,19 +1392,35 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     const list = loadHistory();
     const container = $('history-list');
     if (list.length === 0) {
-      container.innerHTML = '<div class="history-empty">还没有保存任何故事。玩一局，结束后点"保存到故事集"吧。</div>';
+      container.innerHTML = '<div class="history-empty">还没有保存任何故事。<br>玩一局，结束后点"保存"吧。</div>';
       return;
     }
     container.innerHTML = list.map(e => {
       const text = e.story.map(s => s.char).join('');
       const date = new Date(e.timestamp);
       const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-      const seedStr = e.seed ? `启发词：${e.seed}` : '自由发挥';
-      const score = e.result ? `综合 ${((e.result.fluency + e.result.surprise + e.result.completeness + e.result.rescue) / 4).toFixed(1)}` : '';
+      const mode = e.mode || 'story';
+      const tag = mode === 'qa' ? '❓' : '📖';
+      let label;
+      if (mode === 'qa') {
+        const q = e.question || '';
+        label = q.length > 16 ? q.substring(0, 16) + '…' : q;
+      } else {
+        label = e.seed || '自由发挥';
+      }
+
+      // Compute score using the right dim set
+      let score = '';
+      if (e.result) {
+        const dims = SCORE_DIMS[mode];
+        const total = dims.reduce((sum, d) => sum + (Number(e.result[d.key]) || 0), 0);
+        score = `${(total / dims.length).toFixed(1)}分`;
+      }
+
       return `
         <div class="history-item" data-id="${e.id}">
           <div class="meta">
-            <span>${seedStr} · ${dateStr}</span>
+            <span>${tag} ${escapeHtml(label)} · ${dateStr}</span>
             <span>${score}</span>
           </div>
           <div class="text">${escapeHtml(text)}</div>
@@ -1003,6 +1438,7 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     if (!entry) return;
     STATE.detailViewingId = id;
 
+    const mode = entry.mode || 'story';
     const finalStory = entry.story.map(s => {
       const cls = s.by === 'player' ? 'player-char' : 'ai-char';
       return `<span class="${cls}">${escapeHtml(s.char)}</span>`;
@@ -1011,20 +1447,32 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     let resultHtml = '';
     if (entry.result) {
       const r = entry.result;
-      const avg = ((r.fluency + r.surprise + r.completeness + r.rescue) / 4).toFixed(1);
+      const dims = SCORE_DIMS[mode];
+      const total = dims.reduce((sum, d) => sum + (Number(r[d.key]) || 0), 0);
+      const avg = (total / dims.length).toFixed(1);
+      const scoreLine = dims.map(d => `${d.label} ${r[d.key]}`).join(' · ') + ` · 综合 ${avg}`;
       resultHtml = `
-        <div style="margin-top: 16px; font-size: 13px; color: var(--text-2);">
-          流畅 ${r.fluency} · 趣味 ${r.surprise} · 完整 ${r.completeness} · 救场 ${r.rescue} · 综合 ${avg}
+        <div style="margin-top: 16px; font-size: 13px; color: var(--text-2); line-height: 1.8;">
+          ${scoreLine}
         </div>
         <div style="margin-top: 12px; font-size: 14px; line-height: 1.7;">${escapeHtml(r.comment || '')}</div>
       `;
     }
 
     const date = new Date(entry.timestamp);
-    const seedStr = entry.seed ? `启发词：${entry.seed}` : '自由发挥';
+    let headerHtml;
+    if (mode === 'qa') {
+      headerHtml = `
+        <div style="font-size: 12px; color: var(--text-3); margin-bottom: 8px;">问答模式 · ${date.toLocaleString('zh-CN')}</div>
+        <div class="qa-question-display-game" style="margin-bottom: 12px;">${escapeHtml(entry.question || '')}</div>
+      `;
+    } else {
+      const seedStr = entry.seed ? `启发词：${entry.seed}` : '自由发挥';
+      headerHtml = `<div style="font-size: 12px; color: var(--text-3); margin-bottom: 8px;">${escapeHtml(seedStr)} · ${date.toLocaleString('zh-CN')}</div>`;
+    }
 
     $('detail-content').innerHTML = `
-      <div style="font-size: 12px; color: var(--text-3); margin-bottom: 8px;">${seedStr} · ${date.toLocaleString('zh-CN')}</div>
+      ${headerHtml}
       <div style="background: var(--surface-2); border-radius: var(--radius); padding: 16px; font-size: 18px; line-height: 1.9; word-break: break-all;">${finalStory}</div>
       ${resultHtml}
     `;
@@ -1046,10 +1494,11 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     if (entry) generateShareImage(entry);
   });
 
-  // ---------- Share image generation ----------
   $('share-story').addEventListener('click', () => {
     const entry = {
+      mode: STATE.mode,
       seed: STATE.seed,
+      question: STATE.question,
       story: STATE.story,
       result: STATE.lastResult,
       timestamp: Date.now(),
@@ -1061,96 +1510,110 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     const W = 800;
     const PAD = 56;
     const canvas = document.createElement('canvas');
-    canvas.width = W * 2; // 2x for retina
+    canvas.width = W * 2;
     const ctx = canvas.getContext('2d');
     ctx.scale(2, 2);
 
-    // Detect dark mode for theming
     const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const bg = isDark ? '#1a1a1a' : '#faf9f5';
     const surface = isDark ? '#2c2c2a' : '#f1efe8';
+    const accentBg = isDark ? '#0c447c' : '#e6f1fb';
     const textCol = isDark ? '#f0efea' : '#1a1a1a';
     const text2 = isDark ? '#b4b2a9' : '#5f5e5a';
     const text3 = isDark ? '#888780' : '#888780';
     const accent = isDark ? '#85b7eb' : '#185fa5';
 
+    const mode = entry.mode || 'story';
     const text = entry.story.map(s => s.char).join('');
-    const seedStr = entry.seed ? `启发词 · ${entry.seed}` : '自由发挥';
     const date = new Date(entry.timestamp);
     const dateStr = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}`;
 
-    // ---- Layout pass ----
-    const fontFamily = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    const titleText = mode === 'qa' ? '一字接龙问答' : '一字接龙故事';
+    const subtitleText = mode === 'qa'
+      ? `问答模式  ·  ${dateStr}`
+      : `${entry.seed ? `启发词 · ${entry.seed}` : '自由发挥'}  ·  ${dateStr}`;
 
-    // Wrap story text
+    const fontFamily = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
     const storyFont = `500 28px ${fontFamily}`;
+    const questionFont = `500 18px ${fontFamily}`;
+
+    // Wrap question (qa mode only)
+    let questionLines = [];
+    let questionBlockHeight = 0;
+    if (mode === 'qa' && entry.question) {
+      ctx.font = questionFont;
+      questionLines = wrapTextByWidth(ctx, entry.question, W - PAD * 2 - 40);
+      questionBlockHeight = questionLines.length * 30 + 32;
+    }
+
+    // Wrap story
     ctx.font = storyFont;
     const lineHeight = 50;
-    const maxWidth = W - PAD * 2 - 40; // -40 for inner card padding
+    const maxWidth = W - PAD * 2 - 40;
     const storyLines = wrapTextByWidth(ctx, text, maxWidth);
     const storyBlockHeight = storyLines.length * lineHeight + 40;
 
-    // Comment wrap
+    // Wrap comment
     let commentLines = [];
     if (entry.result && entry.result.comment) {
       ctx.font = `400 16px ${fontFamily}`;
       commentLines = wrapTextByWidth(ctx, entry.result.comment, W - PAD * 2);
     }
 
-    // Total height calc
-    let H = PAD; // top
-    H += 28; // title baseline
-    H += 16; // gap
-    H += 18; // meta line
-    H += 32; // gap
-    H += storyBlockHeight; // story card
-    H += 32; // gap
-    if (entry.result) {
-      H += 80; // score row
-      H += 24; // gap
-      H += commentLines.length * 26 + 8;
-    }
-    H += 40; // bottom signature
-    H += PAD;
+    // Layout pass
+    let H = PAD;
+    H += 28; H += 16; H += 18; H += 32;
+    if (questionBlockHeight) { H += questionBlockHeight; H += 24; }
+    H += storyBlockHeight; H += 32;
+    if (entry.result) { H += 80; H += 24; H += commentLines.length * 26 + 8; }
+    H += 40; H += PAD;
 
     canvas.height = H * 2;
     ctx.scale(2, 2);
 
-    // ---- Paint pass ----
-    // bg
+    // Paint
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
     let y = PAD;
-
-    // Title
     ctx.fillStyle = textCol;
     ctx.font = `500 22px ${fontFamily}`;
     ctx.textBaseline = 'top';
-    ctx.fillText('一字接龙故事', PAD, y);
-    y += 28;
+    ctx.fillText(titleText, PAD, y);
+    y += 28; y += 16;
 
-    y += 16;
-    // Meta
     ctx.fillStyle = text3;
     ctx.font = `400 13px ${fontFamily}`;
-    ctx.fillText(`${seedStr}  ·  ${dateStr}`, PAD, y);
-    y += 18;
+    ctx.fillText(subtitleText, PAD, y);
+    y += 18; y += 32;
 
-    y += 32;
-    // Story card
+    // Question block (qa only)
+    if (questionBlockHeight) {
+      ctx.fillStyle = accentBg;
+      roundRect(ctx, PAD, y, W - PAD * 2, questionBlockHeight, 8);
+      ctx.fill();
+      ctx.fillStyle = textCol;
+      ctx.font = questionFont;
+      let qy = y + 16;
+      for (const line of questionLines) {
+        ctx.fillText(line, PAD + 20, qy);
+        qy += 30;
+      }
+      y += questionBlockHeight;
+      y += 24;
+    }
+
+    // Story/answer block
     ctx.fillStyle = surface;
     roundRect(ctx, PAD, y, W - PAD * 2, storyBlockHeight, 12);
     ctx.fill();
 
-    // Story text — color player chars in accent
     ctx.font = storyFont;
     let charIdx = 0;
     let lineY = y + 20;
     for (const line of storyLines) {
       let lineX = PAD + 20;
       for (const ch of line) {
-        // find char in story array by index
         const piece = entry.story[charIdx];
         const isPlayer = piece && piece.by === 'player';
         ctx.fillStyle = isPlayer ? accent : textCol;
@@ -1161,41 +1624,37 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
       lineY += lineHeight;
     }
     y += storyBlockHeight;
-
     y += 32;
 
-    // Scores
+    // Score grid
     if (entry.result) {
       const r = entry.result;
-      const avg = ((r.fluency + r.surprise + r.completeness + r.rescue) / 4).toFixed(1);
-      const items = [
-        ['流畅', r.fluency],
-        ['趣味', r.surprise],
-        ['完整', r.completeness],
-        ['救场', r.rescue],
-        ['综合', avg],
-      ];
-      const cellW = (W - PAD * 2 - 16) / 5;
+      const dims = SCORE_DIMS[mode];
+      const labelMap = mode === 'qa'
+        ? { on_topic: '切题', creativity: '脑洞', logic: '逻辑', rescue: '救场' }
+        : { fluency: '流畅', surprise: '趣味', completeness: '完整', rescue: '救场' };
+      const total = dims.reduce((sum, d) => sum + (Number(r[d.key]) || 0), 0);
+      const avg = (total / dims.length).toFixed(1);
+      const items = dims.map(d => [labelMap[d.key], r[d.key]]);
+      items.push(['综合', avg]);
+
+      const cellW = (W - PAD * 2 - 16) / items.length;
       items.forEach((item, i) => {
         const cx = PAD + i * (cellW + 4);
         ctx.fillStyle = surface;
         roundRect(ctx, cx, y, cellW, 80, 8);
         ctx.fill();
-        // label
         ctx.fillStyle = text2;
         ctx.font = `400 13px ${fontFamily}`;
         ctx.textAlign = 'center';
         ctx.fillText(item[0], cx + cellW / 2, y + 14);
-        // value
         ctx.fillStyle = textCol;
         ctx.font = `500 24px ${fontFamily}`;
         ctx.fillText(String(item[1]), cx + cellW / 2, y + 38);
       });
       ctx.textAlign = 'left';
-      y += 80;
+      y += 80; y += 24;
 
-      y += 24;
-      // Comment
       ctx.fillStyle = text2;
       ctx.font = `400 16px ${fontFamily}`;
       for (const line of commentLines) {
@@ -1206,14 +1665,12 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
     }
 
     y += 40;
-    // Footer
     ctx.fillStyle = text3;
     ctx.font = `400 12px ${fontFamily}`;
     ctx.textAlign = 'right';
     ctx.fillText('一字接龙 · 即兴喜剧小游戏', W - PAD, y);
     ctx.textAlign = 'left';
 
-    // Show modal
     const dataUrl = canvas.toDataURL('image/png');
     $('share-canvas-preview').src = dataUrl;
     $('share-modal').style.display = 'flex';
@@ -1253,12 +1710,17 @@ ${STATE.seed ? `启发词：${STATE.seed}\n` : ''}最终故事：「${STATE.stor
   $('download-share').addEventListener('click', () => {
     const dataUrl = $('share-modal').dataset.dataUrl;
     if (!dataUrl) return;
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `一字接龙_${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (isMobile) {
+      // On mobile, opening the data URL in a new tab usually allows long-press save
+      window.open(dataUrl, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `一字接龙_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   });
   $('close-share').addEventListener('click', () => { $('share-modal').style.display = 'none'; });
 
