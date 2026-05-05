@@ -1001,15 +1001,20 @@
   // ---------- Reasoning log (debug) ----------
   let reasoningEntries = [];
   function logReasoning(aiChar, reasoning, fixPrev) {
-    const turnNum = reasoningEntries.length + 1;
-    const fixNote = (fixPrev && fixPrev.from && fixPrev.to)
-      ? ` <span style="color: var(--warn);">[修正前字 ${escapeHtml(fixPrev.from)}→${escapeHtml(fixPrev.to)}]</span>`
-      : '';
+    const turnNum = reasoningEntries.filter(e => e.type === 'turn').length + 1;
     reasoningEntries.push({
+      type: 'turn',
       turn: turnNum,
       char: aiChar,
-      reasoning: reasoning || '(无)',
-      fixNote
+      reasoning: reasoning || '(无)'
+    });
+    renderReasoningLog();
+  }
+  function logFixRecord(fromCh, toCh, reasoning) {
+    reasoningEntries.push({
+      type: 'fix',
+      fromCh, toCh,
+      reasoning: reasoning || '(无)'
     });
     renderReasoningLog();
   }
@@ -1017,13 +1022,26 @@
     const list = $('reasoning-list');
     const count = $('reasoning-count');
     if (!list || !count) return;
-    count.textContent = reasoningEntries.length;
-    list.innerHTML = reasoningEntries.map(e => `
-      <div style="padding: 6px 0; border-top: 0.5px solid var(--border);">
-        <strong>#${e.turn} 接「${escapeHtml(e.char)}」</strong>${e.fixNote}<br/>
-        <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
-      </div>
-    `).join('');
+    const turnCount = reasoningEntries.filter(e => e.type === 'turn').length;
+    const fixCount = reasoningEntries.filter(e => e.type === 'fix').length;
+    count.textContent = fixCount > 0 ? `${turnCount} 接字 + ${fixCount} 救场` : `${turnCount}`;
+    list.innerHTML = reasoningEntries.map(e => {
+      if (e.type === 'turn') {
+        return `
+          <div style="padding: 6px 0; border-top: 0.5px solid var(--border);">
+            <strong>#${e.turn} 接「${escapeHtml(e.char)}」</strong><br/>
+            <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
+          </div>
+        `;
+      } else {
+        return `
+          <div style="padding: 6px 0; border-top: 0.5px solid var(--border); background: var(--warn-bg);">
+            <strong style="color: var(--warn);">↻ 救场修正 ${escapeHtml(e.fromCh)}→${escapeHtml(e.toCh)}</strong><br/>
+            <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
+          </div>
+        `;
+      }
+    }).join('');
   }
   function clearReasoningLog() {
     reasoningEntries = [];
@@ -1300,41 +1318,6 @@
     const storyLength = STATE.story.length;
     const canEnd = storyLength >= STATE.minLength;
 
-    // 阶段判断
-    let phase;
-    if (storyLength === 0) phase = 'opening-first';
-    else if (storyLength <= 3) phase = 'opening-build';
-    else if (storyLength <= 20) phase = 'middle';
-    else phase = 'closing';
-
-    const phaseGuide = {
-      'opening-first': `这是${STATE.mode === 'qa' ? '回答' : '故事'}的第一个字，你要起势。
-
-✓ 好的开局字必须能"打开一个画面或一个动作"：
-   - 实词：雨/门/她/我/他/三/红/夜/狗/血/电话/猫
-   - 叙事性介词：在/当/有/从/那（"在城市的边缘""当我醒来""有个人""从来没"）
-   - 能引出后文的代词或数词：我/她/那/一/三/这
-
-✗ 不好的开局字是"自己孤立时没有方向感"的字：
-   - 结构助词（的/了/着/过/地/得）——它们需要前文才有意义
-   - 系词（是）——单独起头会像填空题
-   - 标点——${STATE.mode === 'qa' ? '回答' : '故事'}还没开始就打节拍器`,
-
-      'opening-build': `${STATE.mode === 'qa' ? '回答' : '故事'}刚开始，帮它建立场景或角色。接的字要让下一个人有东西可接。`,
-
-      'middle': `进行中，你的字要让事情发生。避免拖延性的字（无意义的"的""了""着""过"等结构助词，除非语法上确实需要）。`,
-
-      'closing': `字数已经较多，可以开始往收尾方向走。但不要急着画句号——${STATE.mode === 'qa' ? '一个回答' : '一个故事'}的"完整"是叙事完整，不是字数到了。`
-    };
-
-    const styles = ['顺接', '抬升', '转折'];
-    const chosenStyle = styles[Math.floor(Math.random() * styles.length)];
-    const styleGuide = {
-      '顺接': '让内容自然地往前走一小步，语义和前文严丝合缝。这不是平庸，是把舞台稳稳搭好。',
-      '抬升': '在前文基础上加入一个新的意象、动作或细节，让内容有推进感。"yes, and"——承接，然后加一点东西。',
-      '转折': '制造一个轻微的转折——意外的对象、突然的角度切换、出人意料的下一秒。注意是"轻微"转折，不是把前文推翻。'
-    };
-
     let contextBlock;
     if (STATE.mode === 'qa') {
       contextBlock = `这是问答模式。问题是：「${STATE.question}」
@@ -1345,133 +1328,62 @@
     }
 
     const completeRule = STATE.mode === 'qa'
-      ? (canEnd ? '可以判定为完整，但只有当回答真的形成了一个对问题的有意义答复时才设 true。字数到了不等于回答完整。' : '当前字数不足，complete 必须为 false。')
-      : (canEnd ? '可以判定为完整，但只有当前文真的形成了一个有起承转合的小故事时才设 true。字数到了不等于故事完整。' : '当前字数不足，complete 必须为 false。');
+      ? (canEnd ? '当回答确实形成了一个对问题的有意义答复时，complete 设为 true。' : '字数不足，complete 必须为 false。')
+      : (canEnd ? '当故事确实有起承转合时，complete 设为 true。' : '字数不足，complete 必须为 false。');
 
-    const prompt = `你正在和一个人即兴玩"一字接龙"游戏。规则：你们轮流贡献一个汉字（或一个标点），拼出一段内容。
-
-这不是普通的接龙——这是即兴喜剧训练的变体。核心精神是"yes, and"：承接前文，然后往前推进一小步。不是要炫技，是要让内容活起来。
+    const prompt = `你和玩家在玩"一字接龙"游戏，轮流贡献一个汉字（或一个标点），合作拼出一段内容。
 
 ${contextBlock}
 当前字数：${storyLength} / 60（硬上限）
 
-【最重要的规则：先判断你处在哪种承接情境】
+【铁律：必须紧跟上一个字处理】
 
-【铁律：上一个字必须被处理，无论它是什么】
+无论上一个字是什么——AI 接的、玩家接的、甚至是看起来不通的怪字——你接的字都必须紧跟在它之后是合理的。
 
-无论上一个字是 AI 接的、玩家接的、还是一个意外的怪字、甚至是语音识别错误造成的不通顺字——你接的字都必须紧跟在它之后处理它。
+合理的两种方式：
+- 延续：和上一个字组词或紧跟下文。比如「猫」后接"咪"组"猫咪"，或接"在"开始"猫在……"
+- 截断：接一个标点（逗号/句号），让上一个字成为短语收尾
 
-不能因为上一个字"看起来有问题"就跳过它去接更早的字。
-
-反例：故事是「我经常会把钥匙放在口袋你」（"你"是玩家接的，可能是识别错误，让句子读起来不通）。这时你应该处理"你"，比如：
-- 把"你"当成新短语的开头：接"你""觉""得"等开始一个新的话头
-- 用标点截断：接"，"让"你"成为一个奇怪但已经定型的收尾，下一回合开新短语
-- 哪怕硬接一个让"你 X"成词的字也行：接"想"组"你想"
-
-绝对不能做的：跳过"你"，去接"里"组成"口袋里"——这等于假装"你"不存在。如果上一个字真的不通，是上一个字的问题，不是你的问题，但你不能用"绕过它"的方式解决——那会让玩家放进去的字消失，破坏游戏的乐趣。
-
----
-
-接下来再做 A/B 情境判断：
-
-中文没有空格分词，所以接字之前你必须先看清楚自己处于哪一种情况，"承接"在两种情况下含义完全不同：
-
-(A) 你在一个词的中间。上一个字是某个还没结束的词的开头或中段。
-   例：「她推开门，看到一只猫」← 上一字是"猫"，它本身已成词，可继续也可结束
-   例：「他从口袋里掏出一把钥」← 上一字是"钥"，明显是"钥匙"的一半，必须接"匙"
-   例：「窗外飘着细」← 上一字是"细"，可能是"细雨""细沙""细线"的一半
-
-   这种情况下，你接的字必须和上一个字直接连读成词或紧密短语。这是硬性的语言约束。
-
-(B) 你在开启一个新词或新短语。前一个字已经是一个完整的词的结尾，或者前面是一个标点。
-   例：「她推开门，」← 逗号之后必须开新词，承接对象是整个前文
-   例：「他从口袋里掏出一把钥匙」← "匙"是"钥匙"的结尾，下一个字开新词
-   例：「窗外飘着细雨」← "雨"已成词，下一字开新词
-
-   这种情况下，你接的字不需要和上一个字组成词，而是要承接整个句子的语境和走向。
-
-   ★ 关键约束：你接的字必须紧跟在上一个字之后是合理的——这有两种合理方式：
-
-   方式 1：延续——接一个汉字，和上一个字组词或紧跟下文。
-      比如「猫」后接"咪"组成"猫咪"，或接"在"开始"猫在……"。
-
-   方式 2：截断——接一个标点（逗号/句号等），让上一个字成为短语的收尾。
-      比如「猫」后接"，"让前半句收住，下一回合再开新短语。
-
-   无论选哪种，都不能跳过上一个字去和更早的字组词。
-   反例：故事是「她推开门，看到一只猫」，你接"铃"想凑"门铃"——错的。
-   "铃"出现在"猫"之后变成「猫铃」，是荒诞字串。你跳过了"猫"。
-
-【接字流程】
-1. 先在心里判断：现在是 (A) 还是 (B)
-2. 如果是 (A)：找一个能和上一个字组成词或短语的字
-3. 如果是 (B)：找一个能让句子向前推进、和整体语境合拍的字
-4. 在 reasoning 字段里说明你判断成 A 还是 B，以及你接的字怎么和前文连起来
-
-【你这一回合的任务】
-${phaseGuide[phase]}
-
-【本回合风格：${chosenStyle}】
-${styleGuide[chosenStyle]}
-注意：风格只在你判断为 (B) 开启新词时才有发挥空间。如果是 (A) 接续词中间，语言约束优先于风格——必须先把词接完整，不能用"转折"为借口接一个不成词的字。
+绝不能做的：跳过上一个字去和更早的字组词。
+反例：故事是「她推开门，看到一只猫」，你接"铃"想凑"门铃"——错的，"猫铃"是荒诞字串。
+反例：故事是「我经常会把钥匙放在口袋你」，你接"里"想凑"口袋里"——错的，跳过了"你"。
 
 【其他规则】
-1. 标点：
-   - 逗号是中文常用的换气符号，自然出现就接，不用克制（一段 30-60 字的中文有 2-5 个逗号是正常的）
-   - 句号/感叹号/问号：仅在 ${canEnd ? '当前字数已≥8 且确实有自然收束感' : '【本回合不允许】因为字数还不够'} 时
-2. 不要在没有明确需要时接结构助词（"的""了""地""得"——它们很容易变成填充字）
-3. 接的字必须是单个字符，不要写两个字
-4. 玩家是语音输入，可能有同音字误识别，请宽容理解上下文
-
-【你的第二个职责：救场前一个玩家字】
-
-玩家是语音输入，可能有同音字识别错误。有时候直到你接下一个字时，才能从上下文判断出前面那个玩家字其实识别错了。
-
-判断逻辑：把"前一个玩家字 + 你接的字"读一遍。如果这两个字组合起来明显读不通，但**把前一个玩家字换成它的同音字**之后就通顺了——那很可能玩家原本说的是同音字，被识别错了。
-
-例：故事是「我在五岁的是」，你打算接"候"。"是候"读不通，但"时候"读得通——所以前面那个"是"很可能是"时"的识别错误。这时你应该建议把"是"修正为"时"。
-
-何时修正：
-- 必须严格同音或近音（声母韵母接近，可以不同声调）
-- 修正后的两字组合必须明显比原组合通顺得多
-- 只能修正紧邻你之前的那一个玩家字（不能动更早的字）
-
-何时不修正：
-- 原字读得通，哪怕你觉得另一个同音字"更精彩"也不要改
-- 修正候选不是同音字（比如把"鹅"改成"猫"）
-- 拿不准的时候
+1. 逗号是中文常用换气符号，自然就接（30-60 字的中文有 2-5 个逗号是正常的）
+2. 句号/感叹号/问号：仅在${canEnd ? '当前字数已≥8 且有自然收束感' : '【本回合不允许，字数不够】'}时
+3. 不要在没必要时接结构助词（"的""了""地""得"，它们容易变成填充字）
+4. 接的字必须是单个字符
+5. 玩家是语音输入，可能有同音字误识别，对怪字宽容理解
 
 【判断是否完整】
 ${completeRule}
 
-严格按 JSON 格式回复，不要 markdown 代码块，不要任何解释文字，只输出 JSON 对象本身：
-{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "fix_prev": null 或 {"from": "原字", "to": "修正后的字"}, "reasoning": "先说你判断为 A 还是 B，再说你接的字和前文的关系；如果你建议修正前一个玩家字，也说明理由"}`;
+严格按 JSON 格式回复，不要 markdown，不要解释文字，只输出 JSON 对象：
+{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么接这个字"}`;
 
     try {
-      const text = await callLLM(prompt, 300);
+      const text = await callLLM(prompt, 200);
       const parsed = extractJSON(text);
       let aiChar = Array.from(parsed.char || '')[0] || '。';
 
-      // 处理"救场前一个玩家字"的建议
-      let flashIndex;
-      if (parsed.fix_prev && parsed.fix_prev.from && parsed.fix_prev.to) {
-        const last = STATE.story[STATE.story.length - 1];
-        const fromCh = Array.from(parsed.fix_prev.from)[0];
-        const toCh = Array.from(parsed.fix_prev.to)[0];
-        // 安全校验:必须是紧邻的玩家字,且原字匹配,且修正字非空
-        if (last && last.by === 'player' && last.char === fromCh && toCh && fromCh !== toCh) {
-          last.char = toCh;
-          flashIndex = STATE.story.length - 1;
-        }
-      }
-
+      // 先把 AI 字接进去
       STATE.story.push({ char: aiChar, by: 'ai' });
-      renderStory(flashIndex);
+      renderStory();
       updateUndoButton();
-      logReasoning(aiChar, parsed.reasoning, parsed.fix_prev);
+      logReasoning(aiChar, parsed.reasoning, null);
       speakChar(aiChar);
 
       const shouldEnd = canEnd && parsed.complete === true;
+
+      // 独立调用:救场前一个玩家字(异步,不阻塞下一回合 UI)
+      // 只有当 AI 字之前是玩家字、且玩家字是汉字时才调用
+      const prevIdx = STATE.story.length - 2;
+      const prevEntry = STATE.story[prevIdx];
+      if (prevEntry && prevEntry.by === 'player' && /[\u4e00-\u9fa5]/.test(prevEntry.char)) {
+        // 不 await——让它后台跑,不影响游戏节奏
+        tryFixPrevPlayerChar(prevIdx, prevEntry.char, aiChar);
+      }
+
       if (shouldEnd || STATE.story.length >= STATE.maxLength) {
         setTimeout(() => endGame(), 800);
       } else {
@@ -1484,6 +1396,50 @@ ${completeRule}
       alert(`AI 出错了：${err.message}`);
       STATE.turn = 'player';
       nextTurn();
+    }
+  }
+
+  // 独立的"救场前一个玩家字"调用——AI 接完字后异步判断
+  async function tryFixPrevPlayerChar(prevIdx, prevChar, aiChar) {
+    const fixPrompt = `玩家在玩一字接龙游戏,他用语音说出了一个字,被识别成了「${prevChar}」。
+紧接着 AI 接了下一个字「${aiChar}」。
+
+读一下这两个字的组合:「${prevChar}${aiChar}」。
+
+判断:玩家说的可能是同音字识别错误吗?
+- 如果「${prevChar}${aiChar}」读起来通顺、合理 → 不是错误,保留原字
+- 如果「${prevChar}${aiChar}」明显读不通,但把「${prevChar}」换成它的同音字之后就通顺了 → 是错误,需要修正
+
+何时修正:
+- 必须严格同音或近音(声母韵母接近,可以不同声调)
+- 修正后必须明显比原来通顺得多
+- 拿不准就不要修
+
+何时不修正:
+- 原组合读得通(哪怕另一个同音字"更精彩"也不修)
+- 修正候选不是同音字
+- 玩家可能就是想接一个怪字(即兴游戏的乐趣)
+
+严格按 JSON 格式回复,只输出对象本身:
+{"fix": null 或 {"to": "修正后的字"}, "reasoning": "一句话理由"}`;
+
+    try {
+      const text = await callLLM(fixPrompt, 100);
+      const parsed = extractJSON(text);
+      if (parsed.fix && parsed.fix.to) {
+        const toCh = Array.from(parsed.fix.to)[0];
+        // 安全校验:位置上的字还没变(没被撤回等),原字仍然匹配
+        const cur = STATE.story[prevIdx];
+        if (cur && cur.by === 'player' && cur.char === prevChar && toCh && toCh !== prevChar) {
+          cur.char = toCh;
+          renderStory(prevIdx);
+          // 在 reasoning log 里追加一条修正记录
+          logFixRecord(prevChar, toCh, parsed.reasoning);
+        }
+      }
+    } catch (err) {
+      // 救场调用失败不影响主流程
+      console.error('Fix prev error:', err);
     }
   }
 
