@@ -1351,26 +1351,30 @@
     // 不要 JSON、不要 reasoning、不要规则,只让它自由续写
     let prompt;
     if (STATE.mode === 'qa') {
-      prompt = `请继续写下面这段中文，让它自然流畅地往下走。不要解释，不要标记，直接续写后面的内容即可。
+      prompt = `下面是一段未完成的中文回答。请只输出"接下来"的内容（不要重复已有的部分），让它自然流畅地往下走。
 
-${STATE.question}
-回答：${currentStory}`;
+问题：${STATE.question}
+已有回答：${currentStory || '（暂无）'}
+
+接下来的内容：`;
     } else {
-      const seedPart = STATE.seed ? `（启发词：${STATE.seed}）\n\n` : '';
-      prompt = `请继续写下面这段中文，让它自然流畅地往下走。不要解释，不要标记，直接续写后面的内容即可。
+      const seedPart = STATE.seed ? `（启发词：${STATE.seed}）\n` : '';
+      prompt = `下面是一段未完成的中文。请只输出"接下来"的内容（不要重复已有的部分），让它自然流畅地往下走。
 
-${seedPart}${currentStory || ''}`;
+${seedPart}已有内容：${currentStory || '（暂无，请从开头写起）'}
+
+接下来的内容：`;
     }
 
     try {
       const text = await callLLM(prompt, 50);
-      // 取生成内容的第一个字符(汉字或中文标点)
-      const aiChar = extractFirstMeaningfulChar(text);
+      // 取续写后的第一个字符,会自动剥离 LLM 重复输出的前缀
+      const { aiChar, cleaned } = extractAIChar(text, currentStory);
 
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory();
       updateUndoButton();
-      logReasoning(aiChar, `LLM 续写，取首字。原始输出：${text.substring(0, 40)}`, null);
+      logReasoning(aiChar, `LLM 输出："${text.substring(0, 50)}" → 剥离重复后取首字"${aiChar}"`, null);
       speakChar(aiChar);
 
       // 独立判断故事是否完整(单独一次调用,和接字解耦)
@@ -1398,19 +1402,44 @@ ${seedPart}${currentStory || ''}`;
     }
   }
 
-  // 从 LLM 续写文本里取第一个有意义的字符(汉字或中文标点)
-  function extractFirstMeaningfulChar(text) {
-    if (!text) return '。';
-    const trimmed = text.trim();
-    if (!trimmed) return '。';
-    for (const ch of Array.from(trimmed)) {
-      if (/\s/.test(ch)) continue;
-      if (/['"「『]/.test(ch)) continue;
-      if (/[\u4e00-\u9fa5]/.test(ch)) return ch;
-      if (/[，。！？、：；]/.test(ch)) return ch;
-      return ch;
+  // 从 LLM 续写文本里取第一个有意义的字符,会先剥离掉 LLM 重复的故事前缀
+  function extractAIChar(text, currentStory) {
+    if (!text) return { aiChar: '。', cleaned: '' };
+    let s = text.trim();
+    // 去除常见的引导前缀
+    s = s.replace(/^(接下来的内容|接下来|续写|内容)[：:]\s*/, '');
+    s = s.replace(/^["'「『]+/, '');
+
+    // 剥离 LLM 重复输出的前缀:做最长公共前缀匹配
+    if (currentStory && currentStory.length > 0) {
+      // 最简单情况:LLM 直接重复了完整故事
+      if (s.startsWith(currentStory)) {
+        s = s.substring(currentStory.length);
+      } else {
+        // LLM 可能只重复了部分,从最长可能的前缀开始往下找
+        // 例如故事是"今天送快递",LLM 输出"快递的小张..."——要找到"快递"这段重叠
+        for (let len = Math.min(currentStory.length, s.length); len >= 2; len--) {
+          const tail = currentStory.substring(currentStory.length - len);
+          if (s.startsWith(tail)) {
+            s = s.substring(len);
+            break;
+          }
+        }
+      }
     }
-    return '。';
+
+    s = s.trim();
+    s = s.replace(/^["'「『]+/, '');
+
+    if (!s) return { aiChar: '。', cleaned: '' };
+
+    for (const ch of Array.from(s)) {
+      if (/\s/.test(ch)) continue;
+      if (/[\u4e00-\u9fa5]/.test(ch)) return { aiChar: ch, cleaned: s };
+      if (/[，。！？、：；]/.test(ch)) return { aiChar: ch, cleaned: s };
+      return { aiChar: ch, cleaned: s };
+    }
+    return { aiChar: '。', cleaned: s };
   }
 
   // 独立判断故事是否已完整
