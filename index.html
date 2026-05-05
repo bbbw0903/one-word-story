@@ -1347,67 +1347,42 @@
     const storyLength = STATE.story.length;
     const canEnd = storyLength >= STATE.minLength;
 
-    let contextBlock;
+    // 极简续写 prompt——让 LLM 在它最自然的状态下生成下一个字
+    // 不要 JSON、不要 reasoning、不要规则,只让它自由续写
+    let prompt;
     if (STATE.mode === 'qa') {
-      contextBlock = `这是问答模式。问题是：「${STATE.question}」
-你和玩家正在一字一字地共同回答这个问题。
-目前的回答：「${currentStory || '(空)'}」`;
+      prompt = `请继续写下面这段中文，让它自然流畅地往下走。不要解释，不要标记，直接续写后面的内容即可。
+
+${STATE.question}
+回答：${currentStory}`;
     } else {
-      contextBlock = `${STATE.seed ? `启发词：${STATE.seed}\n` : ''}目前的故事：「${currentStory || '(空)'}」`;
+      const seedPart = STATE.seed ? `（启发词：${STATE.seed}）\n\n` : '';
+      prompt = `请继续写下面这段中文，让它自然流畅地往下走。不要解释，不要标记，直接续写后面的内容即可。
+
+${seedPart}${currentStory || ''}`;
     }
 
-    const completeRule = STATE.mode === 'qa'
-      ? (canEnd ? '当回答确实形成了一个对问题的有意义答复时，complete 设为 true。' : '字数不足，complete 必须为 false。')
-      : (canEnd ? '当故事确实有起承转合时，complete 设为 true。' : '字数不足，complete 必须为 false。');
-
-    const openingHint = storyLength === 0
-      ? '\n\n【这是开局，接一个能起势的字】\n好的开局字：实词（雨/门/她/我/三/红/夜）、叙事性介词（在/当/有/那/从）、代词（我/她/这）。不要接结构助词（的/了/着/得）、系词（是）、标点。'
-      : '';
-
-    const prompt = `你和玩家在玩"一字接龙"游戏，每人轮流贡献一个汉字（或一个标点）。
-
-${contextBlock}
-当前字数：${storyLength} / 60${openingHint}
-
-【你的核心目标】
-
-每一回合，你的目标都只有一个：让"前文 + 你接的字"读起来仍然是一段自然流畅的中文。
-
-【接字前的自检】
-
-把"前文 + 你打算接的字"在心里完整朗读一遍。
-- 如果朗读时是连贯的、不卡的——这个字可以接
-- 如果朗读时某个位置突兀、读不通——换一个字
-
-注意：是整段朗读体验，不是"我能找到一个解释让这个字合理"。
-朗读体验和找解释是两回事——一段话可以"理论上每个字都能解释"，但读起来仍然别扭。要的是"读起来顺"，不是"能解释通"。
-
-【几个具体提醒】
-
-1. 朗读时如果发现某段是荒诞字串（比如"猫铃"、"周午"、"地的"、"是候"），说明那段不顺。不顺就换字。
-
-2. 标点是合法的接字。如果前文已经形成一个完整短语，接逗号让它收住、下一回合开新短语，是流畅的做法。${canEnd ? '字数到了 8+ 时，可以考虑用句号收束故事。' : ''}
-
-3. 玩家是语音输入，可能有同音字误识别。如果上一字看起来不通，是玩家识别错了——你接字时仍要紧跟它处理（开新短语、加标点截断都行），不能跳过它去和更早的字组词。
-
-【判断是否完整】
-${completeRule}
-
-严格按 JSON 格式回复，不要 markdown，只输出 JSON 对象本身：
-{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "把'前文 + 你接的字'朗读一遍，说明为什么这样接读起来顺"}`;
-
     try {
-      const text = await callLLM(prompt, 300);
-      const parsed = extractJSON(text);
-      let aiChar = Array.from(parsed.char || '')[0] || '。';
+      const text = await callLLM(prompt, 50);
+      // 取生成内容的第一个字符(汉字或中文标点)
+      const aiChar = extractFirstMeaningfulChar(text);
 
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory();
       updateUndoButton();
-      logReasoning(aiChar, parsed.reasoning, null);
+      logReasoning(aiChar, `LLM 续写，取首字。原始输出：${text.substring(0, 40)}`, null);
       speakChar(aiChar);
 
-      const shouldEnd = canEnd && parsed.complete === true;
+      // 独立判断故事是否完整(单独一次调用,和接字解耦)
+      let shouldEnd = false;
+      if (canEnd) {
+        try {
+          shouldEnd = await checkStoryComplete();
+        } catch (e) {
+          console.error('Complete check error:', e);
+        }
+      }
+
       if (shouldEnd || STATE.story.length >= STATE.maxLength) {
         setTimeout(() => endGame(), 800);
       } else {
@@ -1421,6 +1396,41 @@ ${completeRule}
       STATE.turn = 'player';
       nextTurn();
     }
+  }
+
+  // 从 LLM 续写文本里取第一个有意义的字符(汉字或中文标点)
+  function extractFirstMeaningfulChar(text) {
+    if (!text) return '。';
+    const trimmed = text.trim();
+    if (!trimmed) return '。';
+    for (const ch of Array.from(trimmed)) {
+      if (/\s/.test(ch)) continue;
+      if (/['"「『]/.test(ch)) continue;
+      if (/[\u4e00-\u9fa5]/.test(ch)) return ch;
+      if (/[，。！？、：；]/.test(ch)) return ch;
+      return ch;
+    }
+    return '。';
+  }
+
+  // 独立判断故事是否已完整
+  async function checkStoryComplete() {
+    const currentStory = STATE.story.map(s => s.char).join('');
+    let prompt;
+    if (STATE.mode === 'qa') {
+      prompt = `问题：${STATE.question}
+回答：${currentStory}
+
+这个回答是否已经构成对问题的一个有意义的答复（可以收尾结束了）？
+只回答"是"或"否"，不要任何其他内容。`;
+    } else {
+      prompt = `这段故事：${currentStory}
+
+是否已经构成一个有起承转合的小故事（可以收尾结束了）？
+只回答"是"或"否"，不要任何其他内容。`;
+    }
+    const text = await callLLM(prompt, 10);
+    return text.trim().startsWith('是');
   }
 
   $('end-early').addEventListener('click', endGame);
