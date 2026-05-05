@@ -1360,103 +1360,54 @@
       ? (canEnd ? '当回答确实形成了一个对问题的有意义答复时，complete 设为 true。' : '字数不足，complete 必须为 false。')
       : (canEnd ? '当故事确实有起承转合时，complete 设为 true。' : '字数不足，complete 必须为 false。');
 
+    const openingHint = storyLength === 0
+      ? '\n\n【这是开局，接一个能起势的字】\n好的开局字：实词（雨/门/她/我/三/红/夜）、叙事性介词（在/当/有/那/从）、代词（我/她/这）。不要接结构助词（的/了/着/得）、系词（是）、标点。'
+      : '';
+
+    const prompt = `你和玩家在玩"一字接龙"游戏，每人轮流贡献一个汉字（或一个标点）。
+
+${contextBlock}
+当前字数：${storyLength} / 60${openingHint}
+
+【你的核心目标】
+
+每一回合，你的目标都只有一个：让"前文 + 你接的字"读起来仍然是一段自然流畅的中文。
+
+【接字前的自检】
+
+把"前文 + 你打算接的字"在心里完整朗读一遍。
+- 如果朗读时是连贯的、不卡的——这个字可以接
+- 如果朗读时某个位置突兀、读不通——换一个字
+
+注意：是整段朗读体验，不是"我能找到一个解释让这个字合理"。
+朗读体验和找解释是两回事——一段话可以"理论上每个字都能解释"，但读起来仍然别扭。要的是"读起来顺"，不是"能解释通"。
+
+【几个具体提醒】
+
+1. 朗读时如果发现某段是荒诞字串（比如"猫铃"、"周午"、"地的"、"是候"），说明那段不顺。不顺就换字。
+
+2. 标点是合法的接字。如果前文已经形成一个完整短语，接逗号让它收住、下一回合开新短语，是流畅的做法。${canEnd ? '字数到了 8+ 时，可以考虑用句号收束故事。' : ''}
+
+3. 玩家是语音输入，可能有同音字误识别。如果上一字看起来不通，是玩家识别错了——你接字时仍要紧跟它处理（开新短语、加标点截断都行），不能跳过它去和更早的字组词。
+
+【判断是否完整】
+${completeRule}
+
+严格按 JSON 格式回复，不要 markdown，只输出 JSON 对象本身：
+{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "把'前文 + 你接的字'朗读一遍，说明为什么这样接读起来顺"}`;
+
     try {
-      const prevCharBeforeAI = storyLength > 0 ? STATE.story[storyLength - 1].char : null;
-
-      // ===== 第一步:生成候选列表 =====
-      let candidates = null;
-      let candidateGenReasoning = '';
-      if (storyLength > 0) {
-        try {
-          const result = await generateCandidates(contextBlock, prevCharBeforeAI, canEnd);
-          candidates = result.candidates;
-          candidateGenReasoning = result.reasoning;
-        } catch (e) {
-          console.error('Candidate generation error:', e);
-          // 候选生成失败,降级为自由接字
-        }
-      }
-
-      // ===== 第二步:让 AI 在候选里选一个,或自由接(开局/降级) =====
-      let selectionPrompt;
-      if (candidates && candidates.length > 0) {
-        const candidatesDisplay = candidates.map((c, i) => `${i + 1}. ${c}`).join('\n');
-        selectionPrompt = `你和玩家在玩"一字接龙"游戏。
-
-${contextBlock}
-当前字数：${storyLength} / 60（硬上限）
-
-【你的任务】
-从下面这 ${candidates.length} 个候选字里,挑一个最适合接在前文之后、能让故事/回答继续推进的字。
-
-候选字:
-${candidatesDisplay}
-
-【选字考虑】
-- 优先考虑哪个字能让故事/回答有更好的发展空间
-- 不要总选最常见的字(如果"的""了"在候选里,只在确实需要时才选)
-- 如果候选里有标点,意味着这是一个合理的截断点;字数足够时可以考虑选标点
-
-【判断是否完整】
-${completeRule}
-
-严格按 JSON 格式回复,不要 markdown,不要解释文字,只输出 JSON 对象:
-{"char": "你选的那一个字(必须是上面候选里的一个)", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么选这个字"}`;
-      } else {
-        // 开局或候选生成失败:自由接
-        selectionPrompt = `你和玩家在玩"一字接龙"游戏。
-
-${contextBlock}
-当前字数：${storyLength} / 60（硬上限）
-
-【你的任务】
-${storyLength === 0 ? '这是开局,接一个能起势的字。好的开局字:实词(雨/门/她/我/三/红/夜)、叙事性介词(在/当/有/那/从)、代词(我/她/这)。不要接结构助词(的/了/着/得)、系词(是)、标点。' : '接一个紧跟前文的字,要么和上一字组词或紧跟下文,要么用标点截断短语。不要跳过上一字去和更早的字组词。'}
-
-【判断是否完整】
-${completeRule}
-
-严格按 JSON 格式回复,不要 markdown,只输出 JSON 对象:
-{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么接这个字"}`;
-      }
-
-      const text = await callLLM(selectionPrompt, 200);
+      const text = await callLLM(prompt, 300);
       const parsed = extractJSON(text);
       let aiChar = Array.from(parsed.char || '')[0] || '。';
-      const aiReasoning = parsed.reasoning || '';
 
-      // 如果有候选,强制 AI 选的字必须在候选里
-      let inCandidates = true;
-      if (candidates && candidates.length > 0) {
-        if (!candidates.includes(aiChar)) {
-          inCandidates = false;
-          // AI 选了候选外的字,强制改回候选里第一个非"的了着得"的
-          const safe = candidates.find(c => !'的了着得地'.includes(c)) || candidates[0];
-          aiChar = safe;
-        }
-      }
-
-      // 接进故事
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory();
       updateUndoButton();
-      logCandidateTurn({
-        candidates: candidates,
-        candidateReasoning: candidateGenReasoning,
-        chosenChar: aiChar,
-        chosenReasoning: aiReasoning,
-        forcedFromCandidates: !inCandidates
-      });
+      logReasoning(aiChar, parsed.reasoning, null);
       speakChar(aiChar);
 
       const shouldEnd = canEnd && parsed.complete === true;
-
-      // 救场前字(异步,后台跑)
-      const prevIdx = STATE.story.length - 2;
-      const prevEntry = STATE.story[prevIdx];
-      if (prevEntry && prevEntry.by === 'player' && /[\u4e00-\u9fa5]/.test(prevEntry.char)) {
-        tryFixPrevPlayerChar(prevIdx, prevEntry.char, aiChar);
-      }
-
       if (shouldEnd || STATE.story.length >= STATE.maxLength) {
         setTimeout(() => endGame(), 800);
       } else {
@@ -1469,103 +1420,6 @@ ${completeRule}
       alert(`AI 出错了：${err.message}`);
       STATE.turn = 'player';
       nextTurn();
-    }
-  }
-
-  // 第一步:生成 10 个候选字
-  async function generateCandidates(contextBlock, prevChar, canEnd) {
-    const punctHint = canEnd
-      ? '可以包含逗号"，"作为合理换气点;如果故事/回答确实到了收束位置,也可以包含句号"。"'
-      : '可以包含逗号"，"作为合理换气点;字数不够,不要包含句号';
-
-    const prompt = `你在为一个中文一字接龙游戏生成候选字。
-
-${contextBlock}
-紧邻的上一个字:「${prevChar}」
-
-【任务】
-列出 10 个汉字或标点,作为下一个字的候选。每个候选必须满足:
-
-1. 「${prevChar} + 候选字」连读起来,要么是真实存在的中文双字词或短语,要么是中文里大众日常会说的紧密搭配
-2. 不能是你为了凑数编造出来的"理论上可解释"的组合(比如"周午"解释为"周姓中午"——这种不算)
-3. 不要重复(10 个候选互不相同)
-
-候选可以是:
-- 汉字:能和「${prevChar}」组成真实双字词的字(比如「猫」之后:咪、咳)
-- 汉字:能和「${prevChar}」形成合理紧密搭配的字(比如「猫」之后:在、的、是、要、看、说、想、跑、叫)
-- 标点:${punctHint}
-
-【自检】
-列完后,在脑子里把每个候选和「${prevChar}」连读一遍。如果有读不通的、或者你刚才是为了凑够 10 个而编出来的,删掉换一个真实搭配。
-
-【优先考虑】
-- 优先列出能让故事继续发展的字(动作、对象、形容)
-- 也要包含至少 1-2 个不那么常见但合理的字,给故事更多可能性
-- 不要全列虚词
-
-严格按 JSON 格式回复,不要 markdown,只输出对象本身:
-{"candidates": ["字1", "字2", ..., "字10"], "reasoning": "一句话说明这批候选的整体方向"}`;
-
-    const text = await callLLM(prompt, 300);
-    const parsed = extractJSON(text);
-    let raw = Array.isArray(parsed.candidates) ? parsed.candidates : [];
-    // 清洗:每项只取第一个字符,过滤空值,去重
-    const seen = new Set();
-    const cleaned = [];
-    for (const item of raw) {
-      const ch = Array.from(String(item || ''))[0];
-      if (ch && !seen.has(ch)) {
-        seen.add(ch);
-        cleaned.push(ch);
-      }
-    }
-    return {
-      candidates: cleaned,
-      reasoning: parsed.reasoning || ''
-    };
-  }
-
-  // 独立的"救场前一个玩家字"调用——AI 接完字后异步判断
-  async function tryFixPrevPlayerChar(prevIdx, prevChar, aiChar) {
-    const fixPrompt = `玩家在玩一字接龙游戏,他用语音说出了一个字,被识别成了「${prevChar}」。
-紧接着 AI 接了下一个字「${aiChar}」。
-
-读一下这两个字的组合:「${prevChar}${aiChar}」。
-
-判断:玩家说的可能是同音字识别错误吗?
-- 如果「${prevChar}${aiChar}」读起来通顺、合理 → 不是错误,保留原字
-- 如果「${prevChar}${aiChar}」明显读不通,但把「${prevChar}」换成它的同音字之后就通顺了 → 是错误,需要修正
-
-何时修正:
-- 必须严格同音或近音(声母韵母接近,可以不同声调)
-- 修正后必须明显比原来通顺得多
-- 拿不准就不要修
-
-何时不修正:
-- 原组合读得通(哪怕另一个同音字"更精彩"也不修)
-- 修正候选不是同音字
-- 玩家可能就是想接一个怪字(即兴游戏的乐趣)
-
-严格按 JSON 格式回复,只输出对象本身:
-{"fix": null 或 {"to": "修正后的字"}, "reasoning": "一句话理由"}`;
-
-    try {
-      const text = await callLLM(fixPrompt, 100);
-      const parsed = extractJSON(text);
-      if (parsed.fix && parsed.fix.to) {
-        const toCh = Array.from(parsed.fix.to)[0];
-        // 安全校验:位置上的字还没变(没被撤回等),原字仍然匹配
-        const cur = STATE.story[prevIdx];
-        if (cur && cur.by === 'player' && cur.char === prevChar && toCh && toCh !== prevChar) {
-          cur.char = toCh;
-          renderStory(prevIdx);
-          // 在 reasoning log 里追加一条修正记录
-          logFixRecord(prevChar, toCh, parsed.reasoning);
-        }
-      }
-    } catch (err) {
-      // 救场调用失败不影响主流程
-      console.error('Fix prev error:', err);
     }
   }
 
