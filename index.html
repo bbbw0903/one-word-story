@@ -399,6 +399,7 @@
           </svg>
         </button>
         <p id="mic-hint" class="hint" style="font-size: 14px; color: var(--text-2);">按住说话，松开识别</p>
+        <p class="hint" style="text-align: center; font-size: 12px; line-height: 1.6;">单字识别不准时，可以说一个词（自动取第一个字）<br/>也可以说"逗号""句号""问号""感叹号"</p>
         <p id="mic-heard" class="hint" style="min-height: 18px;"></p>
       </div>
       <!-- Typing input area -->
@@ -1044,10 +1045,45 @@
     try { STATE.recognition.stop(); } catch (err) {}
   }
 
+  // 玩家说"逗号""句号"等时,把它转成实际的标点符号
+  // 返回 { char, isPunctuation, displayLabel } 或 null(没匹配上)
+  function detectSpokenPunctuation(transcript) {
+    const t = transcript.trim();
+    // 按从长到短匹配,避免"句号"被"句"截断
+    const map = [
+      ['感叹号', '！', '感叹号'],
+      ['问号', '？', '问号'],
+      ['句号', '。', '句号'],
+      ['句话', '。', '句号'],   // "句号"常被识别成"句话"
+      ['逗号', '，', '逗号'],
+      ['豆号', '，', '逗号'],   // 同音
+      ['顿号', '、', '顿号'],
+      ['冒号', '：', '冒号'],
+      ['分号', '；', '分号'],
+    ];
+    for (const [word, punct, label] of map) {
+      if (t.startsWith(word)) return { char: punct, isPunctuation: true, displayLabel: label };
+    }
+    return null;
+  }
+
   async function finishUtterance() {
     const txt = (STATE.lastTranscript || '').trim();
     micHint.textContent = '按住说话，松开识别';
     if (!txt) { micHeard.textContent = '没听到，再来一次'; return; }
+
+    // 先检查是否说的是标点
+    const punct = detectSpokenPunctuation(txt);
+    if (punct) {
+      micHeard.textContent = `识别"${punct.displayLabel}" → 用了：${punct.char}`;
+      STATE.story.push({ char: punct.char, by: 'player' });
+      renderStory();
+      updateUndoButton();
+      STATE.turn = 'ai';
+      setTimeout(() => nextTurn(), 500);
+      return;
+    }
+
     const chars = Array.from(txt).filter(c => c.trim().length > 0);
     const recognizedChar = chars[0];
     if (!recognizedChar) { micHeard.textContent = '没识别到字，再来一次'; return; }
@@ -1250,33 +1286,55 @@
 
     const prompt = `你正在和一个人即兴玩"一字接龙"游戏。规则：你们轮流贡献一个汉字（或一个标点），拼出一段内容。
 
-这不是普通的接龙——这是即兴喜剧训练的变体。核心精神是"yes, and"：承接对方刚才给出的字，然后往前推进一小步。不是要炫技，是要让内容活起来。
+这不是普通的接龙——这是即兴喜剧训练的变体。核心精神是"yes, and"：承接前文，然后往前推进一小步。不是要炫技，是要让内容活起来。
 
 ${contextBlock}
 当前字数：${storyLength} / 60（硬上限）
+
+【最重要的规则：先判断你处在哪种承接情境】
+
+中文没有空格分词，所以接字之前你必须先看清楚自己处于哪一种情况，"承接"在两种情况下含义完全不同：
+
+(A) 你在一个词的中间。上一个字是某个还没结束的词的开头或中段。
+   例：「她推开门，看到一只猫」← 上一字是"猫"，它本身已成词，可继续也可结束
+   例：「他从口袋里掏出一把钥」← 上一字是"钥"，明显是"钥匙"的一半，必须接"匙"
+   例：「窗外飘着细」← 上一字是"细"，可能是"细雨""细沙""细线"的一半
+
+   这种情况下，你接的字必须和上一个字直接连读成词或紧密短语。这是硬性的语言约束。
+
+(B) 你在开启一个新词或新短语。前一个字已经是一个完整的词的结尾，或者前面是一个标点。
+   例：「她推开门，」← 逗号之后必须开新词，承接对象是整个前文
+   例：「他从口袋里掏出一把钥匙」← "匙"是"钥匙"的结尾，下一个字开新词
+   例：「窗外飘着细雨」← "雨"已成词，下一字开新词
+
+   这种情况下，你接的字不需要和上一个字组成词，而是要承接整个句子的语境和走向。
+
+【接字流程】
+1. 先在心里判断：现在是 (A) 还是 (B)
+2. 如果是 (A)：找一个能和上一个字组成词或短语的字
+3. 如果是 (B)：找一个能让句子向前推进、和整体语境合拍的字
+4. 在 reasoning 字段里说明你判断成 A 还是 B，以及你接的字怎么和前文连起来
 
 【你这一回合的任务】
 ${phaseGuide[phase]}
 
 【本回合风格：${chosenStyle}】
 ${styleGuide[chosenStyle]}
+注意：风格只在你判断为 (B) 开启新词时才有发挥空间。如果是 (A) 接续词中间，语言约束优先于风格——必须先把词接完整，不能用"转折"为借口接一个不成词的字。
 
-【硬性规则】
-1. 默认接汉字。只有这两种情况才允许接标点：
-   - 接逗号：前文是一个完整小句、需要换气。一局最多接 1-2 次逗号。
-   - 接句号/感叹号/问号：仅在 ${canEnd ? '当前字数已≥8 且确实有自然收束感' : '【本回合不允许】因为字数还不够'} 时。
-2. 严禁的偷懒接法：
-   - 不要在没有明确需要时接结构助词（"的""了""地""得"虽然有用但很容易变成填充字）
-   - 不要因为"接什么都行"就接最常见的虚词
-   - 不要重复前文已经出现过的字，除非情节需要
-3. 接的字必须是单个字符，不要写两个字。
-4. 玩家是语音输入，可能有同音字误识别，请宽容理解上下文。
+【其他规则】
+1. 标点：
+   - 逗号是中文常用的换气符号，自然出现就接，不用克制（一段 30-60 字的中文有 2-5 个逗号是正常的）
+   - 句号/感叹号/问号：仅在 ${canEnd ? '当前字数已≥8 且确实有自然收束感' : '【本回合不允许】因为字数还不够'} 时
+2. 不要在没有明确需要时接结构助词（"的""了""地""得"——它们很容易变成填充字）
+3. 接的字必须是单个字符，不要写两个字
+4. 玩家是语音输入，可能有同音字误识别，请宽容理解上下文
 
 【判断是否完整】
 ${completeRule}
 
 严格按 JSON 格式回复，不要 markdown 代码块，不要任何解释文字，只输出 JSON 对象本身：
-{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说明你为什么接这个字，包括它和前文的关系"}`;
+{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "先说你判断为 A 还是 B，再说你接的字和前文的关系，比如'A：接「匙」让「钥」成为「钥匙」' 或 'B：上一字'门'已成词，接「她」开启新主语'"}`;
 
     try {
       const text = await callLLM(prompt, 300);
