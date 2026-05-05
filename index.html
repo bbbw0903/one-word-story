@@ -1006,7 +1006,19 @@
       type: 'turn',
       turn: turnNum,
       char: aiChar,
-      reasoning: reasoning || '(无)'
+      reasoning: reasoning || '(无)',
+      attempts: null
+    });
+    renderReasoningLog();
+  }
+  function logReasoningWithAttempts(finalChar, attempts) {
+    const turnNum = reasoningEntries.filter(e => e.type === 'turn').length + 1;
+    reasoningEntries.push({
+      type: 'turn',
+      turn: turnNum,
+      char: finalChar,
+      reasoning: attempts[attempts.length - 1].reasoning,
+      attempts: attempts
     });
     renderReasoningLog();
   }
@@ -1027,10 +1039,21 @@
     count.textContent = fixCount > 0 ? `${turnCount} 接字 + ${fixCount} 救场` : `${turnCount}`;
     list.innerHTML = reasoningEntries.map(e => {
       if (e.type === 'turn') {
+        let attemptsHtml = '';
+        if (e.attempts && e.attempts.length > 1) {
+          attemptsHtml = '<div style="margin-top: 4px; font-size: 11px; color: var(--text-3);">' +
+            e.attempts.map(a =>
+              `尝试 ${a.attempt}：「${escapeHtml(a.char)}」— ${escapeHtml(a.validation)}`
+            ).join('<br/>') +
+            '</div>';
+        } else if (e.attempts && e.attempts.length === 1 && e.attempts[0].validation !== '免校验') {
+          attemptsHtml = `<div style="margin-top: 4px; font-size: 11px; color: var(--text-3);">校验：${escapeHtml(e.attempts[0].validation)}</div>`;
+        }
         return `
           <div style="padding: 6px 0; border-top: 0.5px solid var(--border);">
             <strong>#${e.turn} 接「${escapeHtml(e.char)}」</strong><br/>
             <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
+            ${attemptsHtml}
           </div>
         `;
       } else {
@@ -1362,25 +1385,95 @@ ${completeRule}
 {"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么接这个字"}`;
 
     try {
-      const text = await callLLM(prompt, 200);
-      const parsed = extractJSON(text);
-      let aiChar = Array.from(parsed.char || '')[0] || '。';
+      // 在调用前记下"上一个字"（AI 接字时的紧邻前字），用于校验
+      const prevCharBeforeAI = storyLength > 0 ? STATE.story[storyLength - 1].char : null;
+      const isPrevPunct = prevCharBeforeAI && /[，。！？、：；,.!?:;]/.test(prevCharBeforeAI);
 
-      // 先把 AI 字接进去
+      let aiChar;
+      let aiReasoning;
+      let attemptLog = []; // 记录所有尝试,展示在 reasoning log 里
+      const MAX_ATTEMPTS = 3;
+
+      // 第一次尝试:用主 prompt
+      let currentPrompt = prompt;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const text = await callLLM(currentPrompt, 200);
+        const parsed = extractJSON(text);
+        const candidateChar = Array.from(parsed.char || '')[0] || '。';
+        const candidateReasoning = parsed.reasoning || '';
+
+        // 校验:如果上一个字不是标点,且候选不是标点,就要校验"prev + candidate"是否通顺
+        // 标点之后接什么都行(B 情境的合法开新词),不需要校验
+        // 候选是标点也不需要校验(截断永远是合法的)
+        const candidateIsPunct = /[，。！？、：；,.!?:;]/.test(candidateChar);
+        if (!prevCharBeforeAI || isPrevPunct || candidateIsPunct) {
+          // 不需要校验,直接接受
+          aiChar = candidateChar;
+          aiReasoning = candidateReasoning;
+          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: '免校验' });
+          // 在 complete 判断之前先把 parsed 存起来
+          var finalParsed = parsed;
+          break;
+        }
+
+        // 调用校验 LLM
+        let validationResult;
+        try {
+          validationResult = await validateCharContinuity(prevCharBeforeAI, candidateChar);
+        } catch (e) {
+          // 校验失败也接受候选,避免卡死
+          console.error('Validation error:', e);
+          aiChar = candidateChar;
+          aiReasoning = candidateReasoning;
+          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: '校验出错,接受' });
+          var finalParsed = parsed;
+          break;
+        }
+
+        if (validationResult.ok) {
+          // 校验通过
+          aiChar = candidateChar;
+          aiReasoning = candidateReasoning;
+          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: `通过(${validationResult.reasoning})` });
+          var finalParsed = parsed;
+          break;
+        }
+
+        // 校验失败
+        attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: `失败(${validationResult.reasoning})` });
+
+        // 如果还有重试机会,构造重做 prompt
+        if (attempt < MAX_ATTEMPTS) {
+          currentPrompt = `${prompt}
+
+【你上一次接的字被校验为不通顺】
+你刚才接的字「${candidateChar}」,组合「${prevCharBeforeAI}${candidateChar}」读不通。
+具体校验意见:${validationResult.reasoning}
+
+请重新接一个字。这次必须确保「${prevCharBeforeAI} + 你接的字」读起来是合理的中文搭配,或者直接接一个标点截断。
+不要再选「${candidateChar}」。`;
+        } else {
+          // 用完所有尝试,接受最后一次的结果
+          aiChar = candidateChar;
+          aiReasoning = candidateReasoning;
+          var finalParsed = parsed;
+        }
+      }
+
+      // 把 AI 字接进去
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory();
       updateUndoButton();
-      logReasoning(aiChar, parsed.reasoning, null);
+      logReasoningWithAttempts(aiChar, attemptLog);
       speakChar(aiChar);
 
-      const shouldEnd = canEnd && parsed.complete === true;
+      const shouldEnd = canEnd && finalParsed.complete === true;
 
       // 独立调用:救场前一个玩家字(异步,不阻塞下一回合 UI)
-      // 只有当 AI 字之前是玩家字、且玩家字是汉字时才调用
       const prevIdx = STATE.story.length - 2;
       const prevEntry = STATE.story[prevIdx];
       if (prevEntry && prevEntry.by === 'player' && /[\u4e00-\u9fa5]/.test(prevEntry.char)) {
-        // 不 await——让它后台跑,不影响游戏节奏
         tryFixPrevPlayerChar(prevIdx, prevEntry.char, aiChar);
       }
 
@@ -1397,6 +1490,30 @@ ${completeRule}
       STATE.turn = 'player';
       nextTurn();
     }
+  }
+
+  // 校验"上一字 + AI 候选字"是否读得通
+  async function validateCharContinuity(prevChar, candidateChar) {
+    const validatePrompt = `判断这个两字组合是否读得通:「${prevChar}${candidateChar}」
+
+通顺的标准(满足任一即算通顺):
+1. 是常用的中文双字词(比如"猫咪"、"门铃"、"是的"、"你的"、"看到")
+2. 是合理的紧密短语(比如"猫在"、"门外"、"是吗"、"我想")
+3. 是量词搭配(比如"一只"、"两个")
+
+不通顺的标准:
+- 两个字放一起明显是荒诞字串,不是任何中文表达
+- 例如:"猫铃"、"门猫"、"是候"、"地的"、"黑方"
+
+严格按 JSON 格式回复,只输出对象本身:
+{"ok": true 或 false, "reasoning": "一句话理由"}`;
+
+    const text = await callLLM(validatePrompt, 80);
+    const parsed = extractJSON(text);
+    return {
+      ok: parsed.ok === true,
+      reasoning: parsed.reasoning || ''
+    };
   }
 
   // 独立的"救场前一个玩家字"调用——AI 接完字后异步判断
