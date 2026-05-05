@@ -1007,18 +1007,20 @@
       turn: turnNum,
       char: aiChar,
       reasoning: reasoning || '(无)',
-      attempts: null
+      candidates: null
     });
     renderReasoningLog();
   }
-  function logReasoningWithAttempts(finalChar, attempts) {
+  function logCandidateTurn({ candidates, candidateReasoning, chosenChar, chosenReasoning, forcedFromCandidates }) {
     const turnNum = reasoningEntries.filter(e => e.type === 'turn').length + 1;
     reasoningEntries.push({
       type: 'turn',
       turn: turnNum,
-      char: finalChar,
-      reasoning: attempts[attempts.length - 1].reasoning,
-      attempts: attempts
+      char: chosenChar,
+      reasoning: chosenReasoning || '(无)',
+      candidates: candidates,
+      candidateReasoning: candidateReasoning,
+      forcedFromCandidates: forcedFromCandidates
     });
     renderReasoningLog();
   }
@@ -1039,21 +1041,25 @@
     count.textContent = fixCount > 0 ? `${turnCount} 接字 + ${fixCount} 救场` : `${turnCount}`;
     list.innerHTML = reasoningEntries.map(e => {
       if (e.type === 'turn') {
-        let attemptsHtml = '';
-        if (e.attempts && e.attempts.length > 1) {
-          attemptsHtml = '<div style="margin-top: 4px; font-size: 11px; color: var(--text-3);">' +
-            e.attempts.map(a =>
-              `尝试 ${a.attempt}：「${escapeHtml(a.char)}」— ${escapeHtml(a.validation)}`
-            ).join('<br/>') +
-            '</div>';
-        } else if (e.attempts && e.attempts.length === 1 && e.attempts[0].validation !== '免校验') {
-          attemptsHtml = `<div style="margin-top: 4px; font-size: 11px; color: var(--text-3);">校验：${escapeHtml(e.attempts[0].validation)}</div>`;
+        let candidatesHtml = '';
+        if (e.candidates && e.candidates.length > 0) {
+          const chosenIdx = e.candidates.indexOf(e.char);
+          const candStr = e.candidates.map((c, i) =>
+            i === chosenIdx
+              ? `<strong style="color: var(--accent);">[${escapeHtml(c)}]</strong>`
+              : escapeHtml(c)
+          ).join(' / ');
+          const forced = e.forcedFromCandidates ? '<span style="color: var(--warn);"> ⚠️ AI 选了候选外的字,被强制改</span>' : '';
+          candidatesHtml = `<div style="margin-top: 4px; font-size: 11px; color: var(--text-3);">候选：${candStr}${forced}</div>`;
+          if (e.candidateReasoning) {
+            candidatesHtml += `<div style="font-size: 11px; color: var(--text-3);">候选 LLM：${escapeHtml(e.candidateReasoning)}</div>`;
+          }
         }
         return `
           <div style="padding: 6px 0; border-top: 0.5px solid var(--border);">
             <strong>#${e.turn} 接「${escapeHtml(e.char)}」</strong><br/>
             <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
-            ${attemptsHtml}
+            ${candidatesHtml}
           </div>
         `;
       } else {
@@ -1354,123 +1360,97 @@
       ? (canEnd ? '当回答确实形成了一个对问题的有意义答复时，complete 设为 true。' : '字数不足，complete 必须为 false。')
       : (canEnd ? '当故事确实有起承转合时，complete 设为 true。' : '字数不足，complete 必须为 false。');
 
-    const prompt = `你和玩家在玩"一字接龙"游戏，轮流贡献一个汉字（或一个标点），合作拼出一段内容。
+    try {
+      const prevCharBeforeAI = storyLength > 0 ? STATE.story[storyLength - 1].char : null;
+
+      // ===== 第一步:生成候选列表 =====
+      let candidates = null;
+      let candidateGenReasoning = '';
+      if (storyLength > 0) {
+        try {
+          const result = await generateCandidates(contextBlock, prevCharBeforeAI, canEnd);
+          candidates = result.candidates;
+          candidateGenReasoning = result.reasoning;
+        } catch (e) {
+          console.error('Candidate generation error:', e);
+          // 候选生成失败,降级为自由接字
+        }
+      }
+
+      // ===== 第二步:让 AI 在候选里选一个,或自由接(开局/降级) =====
+      let selectionPrompt;
+      if (candidates && candidates.length > 0) {
+        const candidatesDisplay = candidates.map((c, i) => `${i + 1}. ${c}`).join('\n');
+        selectionPrompt = `你和玩家在玩"一字接龙"游戏。
 
 ${contextBlock}
 当前字数：${storyLength} / 60（硬上限）
 
-【铁律：必须紧跟上一个字处理】
+【你的任务】
+从下面这 ${candidates.length} 个候选字里,挑一个最适合接在前文之后、能让故事/回答继续推进的字。
 
-无论上一个字是什么——AI 接的、玩家接的、甚至是看起来不通的怪字——你接的字都必须紧跟在它之后是合理的。
+候选字:
+${candidatesDisplay}
 
-合理的两种方式：
-- 延续：和上一个字组词或紧跟下文。比如「猫」后接"咪"组"猫咪"，或接"在"开始"猫在……"
-- 截断：接一个标点（逗号/句号），让上一个字成为短语收尾
-
-绝不能做的：跳过上一个字去和更早的字组词。
-反例：故事是「她推开门，看到一只猫」，你接"铃"想凑"门铃"——错的，"猫铃"是荒诞字串。
-反例：故事是「我经常会把钥匙放在口袋你」，你接"里"想凑"口袋里"——错的，跳过了"你"。
-
-【其他规则】
-1. 逗号是中文常用换气符号，自然就接（30-60 字的中文有 2-5 个逗号是正常的）
-2. 句号/感叹号/问号：仅在${canEnd ? '当前字数已≥8 且有自然收束感' : '【本回合不允许，字数不够】'}时
-3. 不要在没必要时接结构助词（"的""了""地""得"，它们容易变成填充字）
-4. 接的字必须是单个字符
-5. 玩家是语音输入，可能有同音字误识别，对怪字宽容理解
+【选字考虑】
+- 优先考虑哪个字能让故事/回答有更好的发展空间
+- 不要总选最常见的字(如果"的""了"在候选里,只在确实需要时才选)
+- 如果候选里有标点,意味着这是一个合理的截断点;字数足够时可以考虑选标点
 
 【判断是否完整】
 ${completeRule}
 
-严格按 JSON 格式回复，不要 markdown，不要解释文字，只输出 JSON 对象：
+严格按 JSON 格式回复,不要 markdown,不要解释文字,只输出 JSON 对象:
+{"char": "你选的那一个字(必须是上面候选里的一个)", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么选这个字"}`;
+      } else {
+        // 开局或候选生成失败:自由接
+        selectionPrompt = `你和玩家在玩"一字接龙"游戏。
+
+${contextBlock}
+当前字数：${storyLength} / 60（硬上限）
+
+【你的任务】
+${storyLength === 0 ? '这是开局,接一个能起势的字。好的开局字:实词(雨/门/她/我/三/红/夜)、叙事性介词(在/当/有/那/从)、代词(我/她/这)。不要接结构助词(的/了/着/得)、系词(是)、标点。' : '接一个紧跟前文的字,要么和上一字组词或紧跟下文,要么用标点截断短语。不要跳过上一字去和更早的字组词。'}
+
+【判断是否完整】
+${completeRule}
+
+严格按 JSON 格式回复,不要 markdown,只输出 JSON 对象:
 {"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "一句话说为什么接这个字"}`;
+      }
 
-    try {
-      // 在调用前记下"上一个字"（AI 接字时的紧邻前字），用于校验
-      const prevCharBeforeAI = storyLength > 0 ? STATE.story[storyLength - 1].char : null;
-      const isPrevPunct = prevCharBeforeAI && /[，。！？、：；,.!?:;]/.test(prevCharBeforeAI);
+      const text = await callLLM(selectionPrompt, 200);
+      const parsed = extractJSON(text);
+      let aiChar = Array.from(parsed.char || '')[0] || '。';
+      const aiReasoning = parsed.reasoning || '';
 
-      let aiChar;
-      let aiReasoning;
-      let attemptLog = []; // 记录所有尝试,展示在 reasoning log 里
-      const MAX_ATTEMPTS = 3;
-
-      // 第一次尝试:用主 prompt
-      let currentPrompt = prompt;
-
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const text = await callLLM(currentPrompt, 200);
-        const parsed = extractJSON(text);
-        const candidateChar = Array.from(parsed.char || '')[0] || '。';
-        const candidateReasoning = parsed.reasoning || '';
-
-        // 校验:如果上一个字不是标点,且候选不是标点,就要校验"prev + candidate"是否通顺
-        // 标点之后接什么都行(B 情境的合法开新词),不需要校验
-        // 候选是标点也不需要校验(截断永远是合法的)
-        const candidateIsPunct = /[，。！？、：；,.!?:;]/.test(candidateChar);
-        if (!prevCharBeforeAI || isPrevPunct || candidateIsPunct) {
-          // 不需要校验,直接接受
-          aiChar = candidateChar;
-          aiReasoning = candidateReasoning;
-          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: '免校验' });
-          // 在 complete 判断之前先把 parsed 存起来
-          var finalParsed = parsed;
-          break;
-        }
-
-        // 调用校验 LLM
-        let validationResult;
-        try {
-          validationResult = await validateCharContinuity(prevCharBeforeAI, candidateChar);
-        } catch (e) {
-          // 校验失败也接受候选,避免卡死
-          console.error('Validation error:', e);
-          aiChar = candidateChar;
-          aiReasoning = candidateReasoning;
-          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: '校验出错,接受' });
-          var finalParsed = parsed;
-          break;
-        }
-
-        if (validationResult.ok) {
-          // 校验通过
-          aiChar = candidateChar;
-          aiReasoning = candidateReasoning;
-          attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: `通过(${validationResult.reasoning})` });
-          var finalParsed = parsed;
-          break;
-        }
-
-        // 校验失败
-        attemptLog.push({ attempt, char: candidateChar, reasoning: candidateReasoning, validation: `失败(${validationResult.reasoning})` });
-
-        // 如果还有重试机会,构造重做 prompt
-        if (attempt < MAX_ATTEMPTS) {
-          currentPrompt = `${prompt}
-
-【你上一次接的字被校验为不通顺】
-你刚才接的字「${candidateChar}」,组合「${prevCharBeforeAI}${candidateChar}」读不通。
-具体校验意见:${validationResult.reasoning}
-
-请重新接一个字。这次必须确保「${prevCharBeforeAI} + 你接的字」读起来是合理的中文搭配,或者直接接一个标点截断。
-不要再选「${candidateChar}」。`;
-        } else {
-          // 用完所有尝试,接受最后一次的结果
-          aiChar = candidateChar;
-          aiReasoning = candidateReasoning;
-          var finalParsed = parsed;
+      // 如果有候选,强制 AI 选的字必须在候选里
+      let inCandidates = true;
+      if (candidates && candidates.length > 0) {
+        if (!candidates.includes(aiChar)) {
+          inCandidates = false;
+          // AI 选了候选外的字,强制改回候选里第一个非"的了着得"的
+          const safe = candidates.find(c => !'的了着得地'.includes(c)) || candidates[0];
+          aiChar = safe;
         }
       }
 
-      // 把 AI 字接进去
+      // 接进故事
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory();
       updateUndoButton();
-      logReasoningWithAttempts(aiChar, attemptLog);
+      logCandidateTurn({
+        candidates: candidates,
+        candidateReasoning: candidateGenReasoning,
+        chosenChar: aiChar,
+        chosenReasoning: aiReasoning,
+        forcedFromCandidates: !inCandidates
+      });
       speakChar(aiChar);
 
-      const shouldEnd = canEnd && finalParsed.complete === true;
+      const shouldEnd = canEnd && parsed.complete === true;
 
-      // 独立调用:救场前一个玩家字(异步,不阻塞下一回合 UI)
+      // 救场前字(异步,后台跑)
       const prevIdx = STATE.story.length - 2;
       const prevEntry = STATE.story[prevIdx];
       if (prevEntry && prevEntry.by === 'player' && /[\u4e00-\u9fa5]/.test(prevEntry.char)) {
@@ -1492,26 +1472,55 @@ ${completeRule}
     }
   }
 
-  // 校验"上一字 + AI 候选字"是否读得通
-  async function validateCharContinuity(prevChar, candidateChar) {
-    const validatePrompt = `判断这个两字组合是否读得通:「${prevChar}${candidateChar}」
+  // 第一步:生成 10 个候选字
+  async function generateCandidates(contextBlock, prevChar, canEnd) {
+    const punctHint = canEnd
+      ? '可以包含逗号"，"作为合理换气点;如果故事/回答确实到了收束位置,也可以包含句号"。"'
+      : '可以包含逗号"，"作为合理换气点;字数不够,不要包含句号';
 
-通顺的标准(满足任一即算通顺):
-1. 是常用的中文双字词(比如"猫咪"、"门铃"、"是的"、"你的"、"看到")
-2. 是合理的紧密短语(比如"猫在"、"门外"、"是吗"、"我想")
-3. 是量词搭配(比如"一只"、"两个")
+    const prompt = `你在为一个中文一字接龙游戏生成候选字。
 
-不通顺的标准:
-- 两个字放一起明显是荒诞字串,不是任何中文表达
-- 例如:"猫铃"、"门猫"、"是候"、"地的"、"黑方"
+${contextBlock}
+紧邻的上一个字:「${prevChar}」
 
-严格按 JSON 格式回复,只输出对象本身:
-{"ok": true 或 false, "reasoning": "一句话理由"}`;
+【任务】
+列出 10 个汉字或标点,作为下一个字的候选。每个候选必须满足:
 
-    const text = await callLLM(validatePrompt, 80);
+1. 「${prevChar} + 候选字」连读起来,要么是真实存在的中文双字词或短语,要么是中文里大众日常会说的紧密搭配
+2. 不能是你为了凑数编造出来的"理论上可解释"的组合(比如"周午"解释为"周姓中午"——这种不算)
+3. 不要重复(10 个候选互不相同)
+
+候选可以是:
+- 汉字:能和「${prevChar}」组成真实双字词的字(比如「猫」之后:咪、咳)
+- 汉字:能和「${prevChar}」形成合理紧密搭配的字(比如「猫」之后:在、的、是、要、看、说、想、跑、叫)
+- 标点:${punctHint}
+
+【自检】
+列完后,在脑子里把每个候选和「${prevChar}」连读一遍。如果有读不通的、或者你刚才是为了凑够 10 个而编出来的,删掉换一个真实搭配。
+
+【优先考虑】
+- 优先列出能让故事继续发展的字(动作、对象、形容)
+- 也要包含至少 1-2 个不那么常见但合理的字,给故事更多可能性
+- 不要全列虚词
+
+严格按 JSON 格式回复,不要 markdown,只输出对象本身:
+{"candidates": ["字1", "字2", ..., "字10"], "reasoning": "一句话说明这批候选的整体方向"}`;
+
+    const text = await callLLM(prompt, 300);
     const parsed = extractJSON(text);
+    let raw = Array.isArray(parsed.candidates) ? parsed.candidates : [];
+    // 清洗:每项只取第一个字符,过滤空值,去重
+    const seen = new Set();
+    const cleaned = [];
+    for (const item of raw) {
+      const ch = Array.from(String(item || ''))[0];
+      if (ch && !seen.has(ch)) {
+        seen.add(ch);
+        cleaned.push(ch);
+      }
+    }
     return {
-      ok: parsed.ok === true,
+      candidates: cleaned,
       reasoning: parsed.reasoning || ''
     };
   }
