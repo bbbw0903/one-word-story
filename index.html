@@ -432,6 +432,11 @@
       <button id="end-early" style="flex: 1;">就到这吧</button>
       <button id="reset-game" style="flex: 1;">重开</button>
     </div>
+
+    <details id="reasoning-log" style="margin-top: 12px;">
+      <summary style="font-size: 12px; color: var(--text-3); cursor: pointer;">🔍 AI 接字理由（调试用，<span id="reasoning-count">0</span> 条）</summary>
+      <div id="reasoning-list" style="margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--text-2);"></div>
+    </details>
     
     <p class="hint" style="text-align: center;">字数 8 个之后，AI 判断完整就自动收尾</p>
   </div>
@@ -944,6 +949,7 @@
     renderStory();
     applyInputMode();
     updateUndoButton();
+    clearReasoningLog();
     nextTurn();
   }
 
@@ -990,6 +996,38 @@
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- Reasoning log (debug) ----------
+  let reasoningEntries = [];
+  function logReasoning(aiChar, reasoning, fixPrev) {
+    const turnNum = reasoningEntries.length + 1;
+    const fixNote = (fixPrev && fixPrev.from && fixPrev.to)
+      ? ` <span style="color: var(--warn);">[修正前字 ${escapeHtml(fixPrev.from)}→${escapeHtml(fixPrev.to)}]</span>`
+      : '';
+    reasoningEntries.push({
+      turn: turnNum,
+      char: aiChar,
+      reasoning: reasoning || '(无)',
+      fixNote
+    });
+    renderReasoningLog();
+  }
+  function renderReasoningLog() {
+    const list = $('reasoning-list');
+    const count = $('reasoning-count');
+    if (!list || !count) return;
+    count.textContent = reasoningEntries.length;
+    list.innerHTML = reasoningEntries.map(e => `
+      <div style="padding: 6px 0; border-top: 0.5px solid var(--border);">
+        <strong>#${e.turn} 接「${escapeHtml(e.char)}」</strong>${e.fixNote}<br/>
+        <span style="color: var(--text-3);">${escapeHtml(e.reasoning)}</span>
+      </div>
+    `).join('');
+  }
+  function clearReasoningLog() {
+    reasoningEntries = [];
+    renderReasoningLog();
   }
 
   function extractJSON(text) {
@@ -1430,6 +1468,7 @@ ${completeRule}
       STATE.story.push({ char: aiChar, by: 'ai' });
       renderStory(flashIndex);
       updateUndoButton();
+      logReasoning(aiChar, parsed.reasoning, parsed.fix_prev);
       speakChar(aiChar);
 
       const shouldEnd = canEnd && parsed.complete === true;
