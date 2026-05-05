@@ -140,6 +140,13 @@
   }
   .player-char { color: var(--accent); }
   .ai-char { color: var(--text); }
+  .char-fix-flash {
+    background: var(--warn-bg);
+    border-radius: 4px;
+    padding: 0 2px;
+    transition: background 1.5s ease-out;
+  }
+  .char-fix-flash.fade { background: transparent; }
   .placeholder { color: var(--text-3); }
 
   #mic-btn {
@@ -961,16 +968,24 @@
     }
   }
 
-  function renderStory() {
+  function renderStory(flashIndex) {
     const display = $('story-display');
     if (STATE.story.length === 0) {
       display.innerHTML = '<span class="placeholder">故事将在这里展开……</span>';
       return;
     }
-    display.innerHTML = STATE.story.map(s => {
+    display.innerHTML = STATE.story.map((s, i) => {
       const cls = s.by === 'player' ? 'player-char' : 'ai-char';
-      return `<span class="${cls}">${escapeHtml(s.char)}</span>`;
+      const flash = (i === flashIndex) ? ' char-fix-flash' : '';
+      return `<span class="${cls}${flash}" data-idx="${i}">${escapeHtml(s.char)}</span>`;
     }).join('');
+    // After 50ms, add fade class to the flashing span so it transitions to transparent
+    if (flashIndex !== undefined && flashIndex !== null) {
+      setTimeout(() => {
+        const el = display.querySelector(`[data-idx="${flashIndex}"]`);
+        if (el) el.classList.add('fade');
+      }, 50);
+    }
   }
 
   function escapeHtml(s) {
@@ -1370,18 +1385,50 @@ ${styleGuide[chosenStyle]}
 3. 接的字必须是单个字符，不要写两个字
 4. 玩家是语音输入，可能有同音字误识别，请宽容理解上下文
 
+【你的第二个职责：救场前一个玩家字】
+
+玩家是语音输入，可能有同音字识别错误。有时候直到你接下一个字时，才能从上下文判断出前面那个玩家字其实识别错了。
+
+判断逻辑：把"前一个玩家字 + 你接的字"读一遍。如果这两个字组合起来明显读不通，但**把前一个玩家字换成它的同音字**之后就通顺了——那很可能玩家原本说的是同音字，被识别错了。
+
+例：故事是「我在五岁的是」，你打算接"候"。"是候"读不通，但"时候"读得通——所以前面那个"是"很可能是"时"的识别错误。这时你应该建议把"是"修正为"时"。
+
+何时修正：
+- 必须严格同音或近音（声母韵母接近，可以不同声调）
+- 修正后的两字组合必须明显比原组合通顺得多
+- 只能修正紧邻你之前的那一个玩家字（不能动更早的字）
+
+何时不修正：
+- 原字读得通，哪怕你觉得另一个同音字"更精彩"也不要改
+- 修正候选不是同音字（比如把"鹅"改成"猫"）
+- 拿不准的时候
+
 【判断是否完整】
 ${completeRule}
 
 严格按 JSON 格式回复，不要 markdown 代码块，不要任何解释文字，只输出 JSON 对象本身：
-{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "reasoning": "先说你判断为 A 还是 B，再说你接的字和前文的关系，比如'A：接「匙」让「钥」成为「钥匙」' 或 'B：上一字'门'已成词，接「她」开启新主语'"}`;
+{"char": "你接的那一个字", "complete": ${canEnd ? 'true 或 false' : 'false'}, "fix_prev": null 或 {"from": "原字", "to": "修正后的字"}, "reasoning": "先说你判断为 A 还是 B，再说你接的字和前文的关系；如果你建议修正前一个玩家字，也说明理由"}`;
 
     try {
       const text = await callLLM(prompt, 300);
       const parsed = extractJSON(text);
       let aiChar = Array.from(parsed.char || '')[0] || '。';
+
+      // 处理"救场前一个玩家字"的建议
+      let flashIndex;
+      if (parsed.fix_prev && parsed.fix_prev.from && parsed.fix_prev.to) {
+        const last = STATE.story[STATE.story.length - 1];
+        const fromCh = Array.from(parsed.fix_prev.from)[0];
+        const toCh = Array.from(parsed.fix_prev.to)[0];
+        // 安全校验:必须是紧邻的玩家字,且原字匹配,且修正字非空
+        if (last && last.by === 'player' && last.char === fromCh && toCh && fromCh !== toCh) {
+          last.char = toCh;
+          flashIndex = STATE.story.length - 1;
+        }
+      }
+
       STATE.story.push({ char: aiChar, by: 'ai' });
-      renderStory();
+      renderStory(flashIndex);
       updateUndoButton();
       speakChar(aiChar);
 
